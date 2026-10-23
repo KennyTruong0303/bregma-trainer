@@ -1,0 +1,1982 @@
+<title>Bregma Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Single dark theme on purpose: a scope workstation keeps the surround dark so the field reads true. */
+:root{
+  color-scheme: dark;
+  --ground:#0a1112; --panel:#0f191a; --raise:#152223; --raise2:#1b2b2d; --glass:rgba(12,21,22,.86);
+  --line:#203133; --line2:#2d4346;
+  --text:#dae4e1; --muted:#8fa5a1; --faint:#5f7572;
+  --drape:#3d8b97; --drape-hi:#66b8c4; --drape-ink:#06191c;
+  --bregma:#f0b44c; --lambda:#7cc4f5; --pass:#6cc98c; --fail:#ec6f62;
+  --r:8px;
+  --sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --cond:"IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+html,body{height:100%}
+body{background:var(--ground);color:var(--text);font:14px/1.45 var(--sans)}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--drape-hi);outline-offset:2px}
+
+.app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr)}
+.bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-block:9px;padding-inline:16px;border-bottom:1px solid var(--line)}
+.brand{font:600 15px/1 var(--cond);letter-spacing:.12em;text-transform:uppercase}
+.meta{font:400 12px/1 var(--mono);color:var(--faint)}
+.tabs{margin-left:auto;display:flex;background:var(--raise);border:1px solid var(--line2);border-radius:999px;padding:3px}
+.tabs button{background:none;border:0;border-radius:999px;padding:5px 16px;font:500 12px var(--cond);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--drape);color:#fff}
+
+main{display:grid;grid-template-columns:minmax(0,1fr) 300px;min-height:0}
+.stage{position:relative;min-height:0;overflow:hidden;background:var(--ground)}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ov{touch-action:none;cursor:crosshair}
+#ov.pan{cursor:grab}
+#ov.pan.dragging{cursor:grabbing}
+
+/* floating instrument chrome over the scope field */
+.float{position:absolute;background:var(--glass);border:1px solid var(--line2);border-radius:var(--r);backdrop-filter:blur(6px)}
+.surf{top:12px;left:12px;padding:8px 10px;display:flex;flex-direction:column;gap:7px;pointer-events:none;max-width:calc(100% - 24px)}
+.surf .line{display:flex;align-items:center;gap:8px;font:500 12px/1.2 var(--mono)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none}
+.stages{display:grid;grid-template-columns:repeat(4,auto);gap:3px}
+.stages span{padding:0 7px;white-space:nowrap}
+.stages span{height:18px;display:grid;place-items:center;border-radius:3px;background:var(--raise);font:500 10px var(--cond);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.stages span.on{color:var(--drape-ink)}
+.stages span.on[data-s="wet"]{background:#86bcd9}
+.stages span.on[data-s="tacky"]{background:#93d5a9}
+.stages span.on[data-s="drying"]{background:#e2c77c}
+.stages span.on[data-s="over"]{background:#ebe4d5}
+.magread{top:12px;right:12px;padding:8px 10px;display:flex;flex-direction:column;align-items:center;gap:5px;font:500 11px/1.2 var(--mono);color:var(--muted);pointer-events:none}
+.dial{--p:.2;width:54px;height:54px;border-radius:50%;position:relative;display:grid;place-items:center;
+  background:conic-gradient(from 225deg, var(--drape-hi) calc(var(--p) * 270deg), var(--line2) 0 270deg, transparent 0)}
+.dial::after{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--panel);box-shadow:inset 0 1px 3px rgba(0,0,0,.6)}
+.dial b{position:relative;z-index:1;font:500 13px var(--mono);color:var(--text)}
+
+.dock{left:50%;bottom:14px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;width:max-content;max-width:calc(100% - 24px);background:none;border:0;backdrop-filter:none}
+.hint{font:400 12px/1.35 var(--sans);color:var(--text);background:var(--glass);border:1px solid var(--line2);border-radius:999px;padding:5px 12px;text-align:center;max-width:100%}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;background:linear-gradient(180deg,rgba(30,44,46,.92),rgba(12,21,22,.92));border:1px solid var(--line2);border-top-color:#3c5559;border-radius:14px;padding:6px;backdrop-filter:blur(6px);box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.sep{width:1px;align-self:stretch;background:var(--line2);margin:4px 3px}
+.group{display:flex;gap:2px;padding:3px;border-radius:9px;background:rgba(0,0,0,.28);box-shadow:inset 0 1px 2px rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.04)}
+.group.marks .tool{min-width:60px}
+.group.marks .tool .mk{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;font-size:13px;line-height:1}
+.tool{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:54px;height:52px;padding:4px 6px;background:none;border:1px solid transparent;border-radius:7px;font:600 10px var(--cond);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tool svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tool:hover{color:var(--text);background:var(--raise)}
+.tool[aria-pressed="true"]{background:linear-gradient(180deg,#2a3f42,#1c2c2e);border-color:#43605f;color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.06) inset}
+.tool.b[aria-pressed="true"]{box-shadow:inset 0 -2px 0 var(--bregma)}
+.tool.l[aria-pressed="true"]{box-shadow:inset 0 -2px 0 var(--lambda)}
+.tool.b .mk{color:var(--bregma)} .tool.l .mk{color:var(--lambda)}
+.tool .mk{font:600 17px/21px var(--mono);height:21px}
+.tool .ok{position:absolute}
+.zoom{display:flex;align-items:center;gap:6px;padding:0 4px}
+.zoom input{width:110px}
+.zoom button{background:var(--raise);border:1px solid var(--line2);border-radius:6px;width:28px;height:28px;line-height:1}
+.zoom .fit{width:auto;padding:0 9px;font:500 11px var(--cond);letter-spacing:.08em;text-transform:uppercase}
+.loading{position:absolute;inset:0;display:grid;place-items:center;background:rgba(10,17,18,.5);font:500 13px var(--mono);color:var(--muted)}
+.nogl{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--fail)}
+
+/* side panel */
+.panel{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;padding-block:14px 24px;padding-inline:14px;display:flex;flex-direction:column;gap:10px}
+.card{border:1px solid var(--line);border-radius:var(--r);background:var(--raise);padding:12px;display:flex;flex-direction:column;gap:10px}
+.switch{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--muted);cursor:pointer;user-select:none}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.switch .track{width:30px;height:17px;border-radius:999px;background:var(--line2);position:relative;flex:none;transition:background .15s}
+.switch .track::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s}
+.switch input:checked + .track{background:var(--drape)}
+.switch input:checked + .track::after{transform:translateX(13px);background:#fff}
+.switch input:focus-visible + .track{outline:2px solid var(--drape-hi);outline-offset:2px}
+details.drawer .sum{margin-left:auto;font:400 11px var(--mono);letter-spacing:0;text-transform:none;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62%}
+.card-h{display:flex;align-items:baseline;gap:8px}
+.card-h h2::before{content:"";display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:50%;background:var(--drape-hi);box-shadow:0 0 6px var(--drape-hi);vertical-align:1px}
+.card-h h2{margin:0;font:600 11px/1 var(--cond);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.timer{margin-left:auto;font:500 15px var(--mono);font-variant-numeric:tabular-nums}
+.note{margin:0;font-size:12px;line-height:1.45;color:var(--muted)}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.steps li{display:flex;align-items:center;gap:10px;font-size:13px}
+.steps .sym{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:600 12px var(--mono);border:1.5px solid currentColor;flex:none;opacity:.55}
+.steps li.done .sym{opacity:1}
+.steps .b .sym{color:var(--bregma)} .steps .l .sym{color:var(--lambda)}
+.steps .state{margin-left:auto;font:400 12px var(--mono);color:var(--faint)}
+.steps li.done .state{color:var(--text)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{height:34px;background:var(--raise2);border:1px solid var(--line2);border-radius:6px;padding:0 14px;font:500 13px var(--sans)}
+.btn:hover:not(:disabled){border-color:var(--drape-hi)}
+.btn.primary{background:var(--drape);border-color:var(--drape-hi);color:#fff}
+.btn.ghost{background:none}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.wide{flex:1}
+.verdict{display:flex;align-items:center;gap:10px}
+.pill{font:600 12px var(--cond);letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:999px;color:#0a1112}
+.pill.pass{background:var(--pass)} .pill.fail{background:var(--fail)}
+table.stats{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table.stats td{padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+table.stats td:last-child{text-align:right;font-family:var(--mono)}
+table.stats tr:last-child td{border-bottom:0}
+.good{color:var(--pass)} .bad{color:var(--fail)}
+.explain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:7px;font-size:13px}
+.explain li::marker{color:var(--faint)}
+.check{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}
+input[type=checkbox]{accent-color:var(--drape-hi)}
+input[type=range]{-webkit-appearance:none;appearance:none;height:18px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--line2)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;margin-top:-5.5px;border-radius:50%;background:var(--drape-hi);border:3px solid var(--ground);box-shadow:0 0 0 1px var(--drape-hi)}
+input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--line2)}
+input[type=range]::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:var(--drape-hi);border:3px solid var(--ground)}
+.guide{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.guide li{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;font-size:13px;color:var(--muted)}
+.guide .n{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:500 11px var(--mono);border:1px solid var(--line2);flex:none}
+.guide li.done{color:var(--faint)}
+.guide li.done .n{background:var(--pass);border-color:var(--pass);color:#0a1112}
+.guide li.cur{background:var(--raise2);color:var(--text);box-shadow:inset 2px 0 0 var(--drape-hi)}
+.guide li.cur .n{border-color:var(--drape-hi);color:var(--drape-hi)}
+.guide li.skip{color:var(--faint)}
+.guide li.skip .n{border-style:dashed}
+.guide .tag{margin-left:auto;font:400 11px var(--mono);color:var(--faint)}
+.guide li.b .tag{color:var(--bregma)} .guide li.l .tag{color:var(--lambda)}
+.tip{margin:0;font-size:13px;line-height:1.45;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px 11px}
+
+details.drawer{border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;background:rgba(255,255,255,.012)}
+details.drawer summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;font:600 11px/1 var(--cond);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+details.drawer summary::-webkit-details-marker{display:none}
+details.drawer summary::after{content:"+";margin-left:8px;font:400 16px/1 var(--mono);color:var(--faint)}
+details.drawer[open] summary::after{content:"−"}
+details.drawer .body{display:flex;flex-direction:column;gap:12px;padding-top:12px}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--line2);border-radius:6px;overflow:hidden}
+.seg button{background:var(--raise);border:0;border-right:1px solid var(--line2);height:32px;font:500 13px var(--sans);color:var(--muted)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--raise2);color:var(--text);box-shadow:inset 0 -2px 0 var(--drape-hi)}
+label.field{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;font-size:13px}
+label.field input[type=range]{grid-column:1 / -1;width:100%}
+label.field output{font:400 12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.seed{display:flex;gap:6px}
+.seed input{flex:1;min-width:0;height:34px;background:var(--raise);border:1px solid var(--line2);border-radius:6px;padding:0 10px;font:400 13px var(--mono)}
+
+/* stereotax HUD and surgery panels */
+:root{--bone:#d9b3a3}
+.arm{right:12px;top:150px;padding:9px 10px;display:flex;flex-direction:column;gap:7px;width:206px}
+.arm-h{display:flex;align-items:center;gap:7px;font:500 11px var(--mono);color:var(--muted)}
+.led{width:9px;height:9px;border-radius:50%;background:#2b3b3d;box-shadow:inset 0 1px 2px rgba(0,0,0,.6)}
+.led.on{background:#7be38f;box-shadow:0 0 8px #7be38f}
+.readout{display:grid;grid-template-columns:auto 1fr;gap:1px 10px;font:500 11px var(--mono);color:var(--faint);background:#050a0a;border:1px solid #1d2b2c;border-radius:6px;padding:6px 9px}
+.readout b{font:500 17px/1.25 var(--mono);color:#9ff0c0;text-align:right;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.armkeys{display:grid;grid-template-columns:repeat(2,1fr);gap:4px}
+.armkey{height:28px;background:var(--raise);border:1px solid var(--line2);border-radius:6px;font:500 11px var(--mono);color:var(--text);touch-action:none}
+.armkey:active{background:var(--drape)}
+.seg.mini button{height:24px;font:500 11px var(--mono)}
+.btn.sm{height:28px;padding:0 10px;font-size:12px}
+.keys{margin:0;font:400 10px var(--mono);color:var(--faint)}
+.knob{display:grid;grid-template-columns:1fr auto 74px auto;gap:6px;align-items:center;font-size:13px}
+.knob b{text-align:center;font:500 12px var(--mono);font-variant-numeric:tabular-nums}
+.rec{display:flex;flex-direction:column;gap:6px}
+.calc,.notebook{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font:400 12px var(--mono)}
+.notebook li{display:flex;gap:8px;padding:4px 6px;border-radius:4px;background:var(--panel)}
+.notebook li b{min-width:52px;color:var(--text);font-weight:500}
+.notebook li span{color:var(--muted)}
+.notebook li.stale{opacity:.45}
+.calc .good{color:var(--pass)} .calc .bad{color:var(--fail)}
+select{height:34px;background:var(--raise);border:1px solid var(--line2);border-radius:6px;padding:0 8px}
+input[type=number]{width:78px;height:30px;background:var(--raise);border:1px solid var(--line2);border-radius:6px;padding:0 8px;font:400 12px var(--mono)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.grid2 label.field{grid-template-columns:1fr;font-size:12px}
+.plan{margin:0;font:400 13px var(--mono)} .plan b{color:#9ff0c0;font-weight:500}
+.mono{font-family:var(--mono)}
+.progress{height:6px;border-radius:3px;background:var(--line2);overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--drape-hi)}
+.ffrow{justify-content:space-between}
+h3.sub{margin:4px 0 0;font:600 11px var(--cond);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.causes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;font-size:12px}
+.causes li{display:grid;grid-template-columns:1fr 70px 54px;gap:8px;align-items:center}
+.causes .bar{height:6px;background:var(--line2);border-radius:3px;overflow:hidden}
+.causes .bar i{display:block;height:100%;background:var(--bregma)}
+.causes b{text-align:right;font:500 12px var(--mono)}
+.track{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.track figure{margin:0;background:#050a0a;border:1px solid #1d2b2c;border-radius:6px;padding:4px}
+.track svg{width:100%;height:auto;display:block}
+.track figcaption{font:500 10px var(--mono);color:var(--faint);text-align:center}
+@media (max-width:860px){
+  .arm{top:auto;right:12px;bottom:118px;width:190px}
+  html,body{height:auto}
+  .app{height:auto}
+  main{grid-template-columns:1fr}
+  .stage{height:min(118vw,78svh);min-height:420px}
+  .panel{border-left:0;border-top:1px solid var(--line);overflow:visible}
+  .tool{min-width:44px;height:46px}
+  .tool span.lbl{display:none}
+  .zoom input{width:70px}
+  .stages{grid-template-columns:repeat(4,44px)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <header class="bar">
+    <span class="brand">Bregma Bench</span>
+    <span class="meta">C57BL/6J · dorsal skull · v2a</span>
+    <nav class="tabs" role="tablist" aria-label="Mode">
+      <button id="tab-quiz" role="tab" aria-selected="true">Quiz</button>
+      <button id="tab-explore" role="tab" aria-selected="false">Explore</button>
+      <button id="tab-surgery" role="tab" aria-selected="false">Surgery</button>
+    </nav>
+  </header>
+
+  <main>
+    <div class="stage" id="stage">
+      <canvas id="gl"></canvas>
+      <canvas id="ov" aria-label="Microscope field. Use the selected tool on the skull."></canvas>
+
+      <div class="float surf" aria-live="polite">
+        <div class="line"><span class="dot" id="surf-dot"></span><span id="surf-text">Hover over bone to read the surface</span></div>
+        <div class="stages" id="stages"><span data-s="wet">Wet</span><span data-s="tacky">Tacky</span><span data-s="drying">Drying</span><span data-s="over">Over-dry</span></div>
+      </div>
+      <div class="float magread"><div class="dial" id="dial"><b id="mag-text">11×</b></div><span id="field-text"></span></div>
+
+      <div class="float arm" id="arm" hidden>
+        <div class="arm-h"><span class="led" id="contact-led"></span><span id="contact-txt">no contact</span></div>
+        <div class="readout"><span>AP</span><b id="r-ap">0.00</b><span>ML</span><b id="r-ml">0.00</b><span>DV</span><b id="r-dv">0.000</b></div>
+        <div class="armkeys">
+          <button class="armkey" data-v="0,1,0" aria-label="AP forward (up arrow)">AP▲</button>
+          <button class="armkey" data-v="0,0,1" aria-label="Raise (W)">DV▲</button>
+          <button class="armkey" data-v="-1,0,0" aria-label="ML left (left arrow)">◀ML</button>
+          <button class="armkey" data-v="1,0,0" aria-label="ML right (right arrow)">ML▶</button>
+          <button class="armkey" data-v="0,-1,0" aria-label="AP back (down arrow)">AP▼</button>
+          <button class="armkey" data-v="0,0,-1" aria-label="Lower (S)">DV▼</button>
+        </div>
+        <div class="seg mini" id="step-seg" role="group" aria-label="Knob step"><button data-step="0.01">0.01</button><button data-step="0.05" aria-pressed="true">0.05</button><button data-step="0.5">0.5</button></div>
+        <div class="row"><button class="btn sm" id="zero-xy">Zero AP/ML</button><button class="btn sm" id="zero-z">Zero DV</button></div>
+        <p class="keys">Arrows: AP/ML · W/S: DV · Shift: 0.01</p>
+      </div>
+
+      <div class="float dock">
+        <div class="hint" id="tool-hint"></div>
+        <div class="toolbar" role="toolbar" aria-label="Tools">
+          <div class="group marks" role="group" aria-label="Landmark to place">
+            <button class="tool b" data-tool="b" aria-pressed="true" title="Place bregma (1 or B)"><span class="mk">B</span><span class="lbl">Bregma</span></button>
+            <button class="tool l" data-tool="l" aria-pressed="false" title="Place lambda (2 or L)"><span class="mk">λ</span><span class="lbl">Lambda</span></button>
+          </div>
+          <div class="group" role="group" aria-label="Instruments">
+          <button class="tool" data-tool="saline" aria-pressed="false" title="Saline dropper (3)"><svg viewBox="0 0 24 24"><path d="M14.5 3.5l6 6"/><path d="M19 5l-1.5-1.5"/><path d="M17 7 8.5 15.5 6 16.5l1-2.5L15.5 5.5"/><path d="M5.2 18.4c.9 1 .9 2 .2 2.6s-1.8.4-2.3-.4c-.4-.8.2-1.9 2.1-2.2z"/></svg><span class="lbl">Saline</span></button>
+          <button class="tool" data-tool="swab" aria-pressed="false" title="Swab (4)"><svg viewBox="0 0 24 24"><path d="M5 19 15 9"/><ellipse cx="17.5" cy="6.5" rx="3.2" ry="2.2" transform="rotate(-45 17.5 6.5)"/></svg><span class="lbl">Swab</span></button>
+          <button class="tool" data-tool="press" aria-pressed="false" title="Press (5)"><svg viewBox="0 0 24 24"><path d="M10 3.5v8"/><path d="M10 8.5c0-1.4 2.8-1.4 2.8 0v2"/><path d="M12.8 9.5c0-1.4 2.8-1.4 2.8 0v2"/><path d="M15.6 10.5c0-1.4 2.6-1.4 2.6 0v3.2a5 5 0 0 1-5 5h-1.4a5 5 0 0 1-4-2l-2.4-3.2c-.9-1.2.8-2.6 1.9-1.5L10 13.5"/><path d="M3 21.5h18"/></svg><span class="lbl">Press</span></button>
+          <button class="tool" data-tool="pan" aria-pressed="false" title="Pan (6)"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg><span class="lbl">Pan</span></button>
+          </div>
+          <div class="group surg-only" role="group" aria-label="Surgery instruments" hidden>
+            <button class="tool" data-tool="pen" aria-pressed="false" title="Marker pen (9)"><svg viewBox="0 0 24 24"><path d="M15 4l5 5L9 20H4v-5z"/><path d="M13 6l5 5"/></svg><span class="lbl">Pen</span></button>
+            <button class="tool" data-tool="drill" aria-pressed="false" title="Drill (7)"><svg viewBox="0 0 24 24"><path d="M3 9h9l2 2v2l-2 2H3z"/><path d="M14 12h4"/><path d="M18 12l3-1v2z"/><path d="M6 15v4h4"/></svg><span class="lbl">Drill</span></button>
+            <button class="tool" data-tool="needle" aria-pressed="false" title="30 G needle (8)"><svg viewBox="0 0 24 24"><path d="M4 20l9-9"/><path d="M12 6l6 6"/><path d="M15 3l6 6"/><path d="M14 7l3-3M17 10l3-3"/></svg><span class="lbl">Needle</span></button>
+          </div>
+          <div class="zoom">
+            <button id="zoom-out" aria-label="Zoom out">−</button>
+            <input id="zoom" type="range" min="0" max="1000" value="200" aria-label="Magnification">
+            <button id="zoom-in" aria-label="Zoom in">+</button>
+            <button id="zoom-fit" class="fit">Fit</button>
+          </div>
+        </div>
+      </div>
+      <div class="loading" id="loading">Preparing skull…</div>
+    </div>
+
+    <aside class="panel">
+      <section class="card" id="quiz-task">
+        <div class="card-h"><h2>Procedure</h2><span class="timer" id="timer">0:00</span></div>
+        <label class="switch"><input type="checkbox" id="show-guide"><span class="track"></span><span id="guide-mode">Show guide</span></label>
+        <ol class="guide" id="guide"></ol>
+        <p class="tip" id="guide-tip"></p>
+        <div class="row">
+          <button class="btn primary wide" id="submit" disabled>Submit</button>
+          <button class="btn ghost" id="giveup">Reveal</button>
+        </div>
+      </section>
+
+      <section class="card" id="quiz-result" hidden>
+        <div class="verdict"><span class="pill" id="verdict">Pass</span><span class="note" id="verdict-note"></span></div>
+        <table class="stats"><tbody id="stats"></tbody></table>
+        <label class="check"><input type="checkbox" id="show-construction" checked> Show best-fit construction</label>
+        <ul class="explain" id="explain"></ul>
+        <button class="btn primary" id="next">Next skull</button>
+      </section>
+
+      <section class="card" id="explore-card" hidden>
+        <div class="card-h"><h2>Explore</h2></div>
+        <p class="note">Toggle overlays and change the variant to see how each setup looks. Markers still work, so you can check yourself.</p>
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="ov-sutures"> Sutures</label>
+          <label class="check"><input type="checkbox" id="ov-bones"> Bone names</label>
+          <label class="check"><input type="checkbox" id="ov-sinus"> Sinuses</label>
+          <label class="check"><input type="checkbox" id="ov-fit"> Best-fit lines</label>
+          <label class="check"><input type="checkbox" id="ov-truth"> True B / λ</label>
+          <label class="check"><input type="checkbox" id="ov-err"> My error</label>
+        </div>
+        <p class="note" id="live-err"></p>
+      </section>
+
+      <section class="card" id="surg-card" hidden>
+        <div class="card-h"><h2>Surgery run</h2><span class="timer" id="simclock">0:00</span></div>
+        <div class="row ffrow"><span class="note">Time</span><div class="seg mini" id="ff-seg" role="group" aria-label="Fast-forward"><button data-ff="1" aria-pressed="true">1×</button><button data-ff="10">10×</button><button data-ff="60">60×</button></div></div>
+        <ol class="guide" id="sguide"></ol>
+        <p class="tip" id="sguide-tip"></p>
+        <div class="row"><button class="btn ghost" id="s-end">End run &amp; score</button><button class="btn" id="s-new">New mouse</button></div>
+      </section>
+
+      <section class="card" id="surg-result" hidden>
+        <div class="verdict"><span class="pill" id="s-verdict">On target</span><span class="note" id="s-verdict-note"></span></div>
+        <table class="stats"><tbody id="s-stats"></tbody></table>
+        <div class="track" id="s-track"></div>
+        <h3 class="sub">Where the error came from <span class="note">(estimated; causes can partly cancel)</span></h3>
+        <ul class="causes" id="s-causes"></ul>
+        <h3 class="sub">Complications</h3>
+        <ul class="explain" id="s-comp"></ul>
+      </section>
+
+      <details class="drawer surg-panel" id="frame-drawer" open hidden>
+        <summary>Frame &amp; notebook<span class="sum" id="frame-sum"></span></summary>
+        <div class="body">
+          <div class="knob"><span>Incisor bar</span><button class="btn sm" id="f-inc-dn" aria-label="Lower incisor bar">−</button><b id="f-incisor">0.00 mm</b><button class="btn sm" id="f-inc-up" aria-label="Raise incisor bar">+</button></div>
+          <div class="knob"><span>Ear-bar tilt</span><button class="btn sm" id="f-ear-dn" aria-label="Tilt ear bars down">−</button><b id="f-ear">0.00 mm</b><button class="btn sm" id="f-ear-up" aria-label="Tilt ear bars up">+</button></div>
+          <div class="rec"><span class="note">Record reading as</span><div class="row"><button class="btn sm" data-rec="Bregma">Bregma</button><button class="btn sm" data-rec="Lambda">Lambda</button><button class="btn sm" data-rec="Left">Left</button><button class="btn sm" data-rec="Right">Right</button></div></div>
+          <ul class="calc" id="nb-calc"></ul>
+          <ul class="notebook" id="nb-list"></ul>
+        </div>
+      </details>
+
+      <details class="drawer surg-panel" id="target-drawer" open hidden>
+        <summary>Target<span class="sum" id="target-sum"></span></summary>
+        <div class="body">
+          <select id="t-target" aria-label="Target">
+            <option value="nac">Nucleus accumbens core</option><option value="lv">Lateral ventricle</option><option value="bla">Basolateral amygdala</option><option value="stn">Subthalamic nucleus</option><option value="ca1">Dorsal hippocampus, CA1</option>
+          </select>
+          <div class="seg" id="hemi-seg" role="group" aria-label="Hemisphere"><button data-hemi="-1">Left</button><button data-hemi="1" aria-pressed="true">Right</button></div>
+          <label class="check"><input type="checkbox" id="t-scale"> Scale AP/ML by measured bregma–lambda ÷ 4.21</label>
+          <p class="plan" id="t-plan"></p>
+          <p class="note mono" id="t-delta"></p>
+          <label class="field">Hit tolerance (µm) <input type="number" id="t-tol" min="50" max="1000" step="25" value="250"></label>
+          <p class="note">Example coordinates from a published IACUC SOP (AP/ML from bregma, DV from the dura here). Check them against your atlas and your lab's convention.</p>
+        </div>
+      </details>
+
+      <details class="drawer surg-panel" id="inj-drawer" open hidden>
+        <summary>Nanoject<span class="sum">glass pipette</span></summary>
+        <div class="body">
+          <div class="row"><button class="btn sm" id="nj-test">Test flow</button><button class="btn sm" id="nj-rebreak" hidden>Re-break tip</button></div>
+          <p class="note" id="nj-status"></p>
+          <div class="grid2">
+            <label class="field">Rate (nl/min) <input type="number" id="nj-rate" min="5" max="500" step="5" value="30"></label>
+            <label class="field">Volume (nl) <input type="number" id="nj-vol" min="10" max="2000" step="10" value="300"></label>
+            <label class="field">Lower at (mm/min) <input type="number" id="nj-speed" min="0.1" max="20" step="0.1" value="1"></label>
+            <label class="field">Withdraw at (mm/min) <input type="number" id="nj-wspeed" min="0.1" max="20" step="0.1" value="0.5"></label>
+            <label class="field">Wait (min) <input type="number" id="nj-wait" min="0" max="30" step="1" value="10"></label>
+          </div>
+          <div class="row"><button class="btn sm" id="nj-lower">Lower to DV</button><button class="btn sm primary" id="nj-inject">Inject</button><button class="btn sm" id="nj-withdraw">Withdraw</button></div>
+          <div class="progress"><i id="nj-bar"></i></div>
+          <p class="note mono"><span id="nj-prog"></span> <span id="nj-wait-t"></span></p>
+        </div>
+      </details>
+
+      <details class="drawer" id="variant-drawer" hidden>
+        <summary>Skull variant<span class="sum">sliders</span></summary>
+        <div class="body">
+          <label class="field">Coronal junction offset <output id="o-corOff"></output><input type="range" id="g-corOff" min="0" max="0.5" step="0.01"></label>
+          <label class="field">Coronal curvature <output id="o-corCurv"></output><input type="range" id="g-corCurv" min="0.02" max="0.22" step="0.005"></label>
+          <label class="field">Lambda ambiguity <output id="o-amb"></output><input type="range" id="g-amb" min="0" max="1" step="0.01"></label>
+          <label class="field">Blood in sutures <output id="o-sutBlood"></output><input type="range" id="g-sutBlood" min="0" max="1" step="0.01"></label>
+          <label class="field">Sinus offset from midline <output id="o-sinusOff"></output><input type="range" id="g-sinusOff" min="-0.25" max="0.25" step="0.01"></label>
+          <label class="field">Stray hairs <output id="o-hairs"></output><input type="range" id="g-hairs" min="0" max="8" step="1"></label>
+          <label class="field">Tissue patch over lambda <output id="o-lamPatch"></output><input type="range" id="g-lamPatch" min="0" max="1" step="1"></label>
+          <label class="field">Leftover tissue <output id="o-tissue"></output><input type="range" id="g-tissue" min="0" max="1" step="0.01"></label>
+          <label class="field">Skull rotation in view <output id="o-yaw"></output><input type="range" id="g-yaw" min="-12" max="12" step="0.5"></label>
+          <label class="field">Head tilt <output id="o-tilt"></output><input type="range" id="g-tilt" min="0" max="3" step="0.1"></label>
+        </div>
+      </details>
+
+      <details class="drawer" id="skull-drawer">
+        <summary>Skull<span class="sum" id="skull-sum"></span></summary>
+        <div class="body">
+          <div class="seg" id="diff-seg" role="group" aria-label="Difficulty">
+            <button data-diff="easy" aria-pressed="false">Easy</button>
+            <button data-diff="medium" aria-pressed="true">Medium</button>
+            <button data-diff="hard" aria-pressed="false">Hard</button>
+          </div>
+          <p class="note">Easy shows the step guide, Medium short hints, Hard nothing. The skull mix is the same at every level for now.</p>
+          <label class="field">Age <output id="o-age"></output><input type="range" id="age" min="4" max="20" step="1" value="10"></label>
+          <p class="note" id="bl-note"></p>
+          <div class="seed">
+            <input id="seed" inputmode="numeric" aria-label="Skull seed">
+            <button class="btn" id="load-seed">Load</button>
+            <button class="btn primary" id="new-skull">New</button>
+          </div>
+          <p class="note">Send a labmate the seed number and they get the same skull.</p>
+        </div>
+      </details>
+
+      <details class="drawer">
+        <summary>Settings<span class="sum" id="settings-sum"></span></summary>
+        <div class="body">
+          <label class="field">Pass threshold <output id="o-thr"></output><input type="range" id="thr" min="25" max="300" step="5" value="100"></label>
+          <label class="field">Drying speed <output id="o-dry"></output><input type="range" id="dry" min="0.5" max="3" step="0.1" value="1"></label>
+          <p class="note">At 1×, a saline film lasts a few minutes unless you swab it. Swabbed bone stays tacky for about 1–2 minutes.</p>
+        </div>
+      </details>
+    </aside>
+  </main>
+</div>
+
+<script>
+"use strict";
+(() => {
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
+// ---------- world & resolution ----------
+// World frame in mm: x = mediolateral (animal's right +), y = anteroposterior (rostral +).
+const WX0 = -7, WY1 = 5.5, WS = 14;
+const HI = 2048, MO = 256;
+const ADULT_BL = 4.21;                         // Paxinos & Franklin adult C57BL/6J
+const blOfAge = a => 4.25 - 0.55 * Math.exp(-(a - 4) / 3.5); // young end is an estimate
+
+// ---------- seeded randomness ----------
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function gauss(r){let u=0;while(!u)u=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*r())}
+const clamp=(x,a,b)=>x<a?a:x>b?b:x;
+const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+function noise1(r){const n=512,v=new Float32Array(n);for(let i=0;i<n;i++)v[i]=r()*2-1;
+  return x=>{const xi=Math.floor(x),f=x-xi,a=v[((xi%n)+n)%n],b=v[(((xi+1)%n)+n)%n],t=(1-Math.cos(f*Math.PI))/2;return a+(b-a)*t}}
+function noise2(r,n=64){const v=new Float32Array(n*n);for(let i=0;i<n*n;i++)v[i]=r();
+  return (x,y)=>{const xi=Math.floor(x),yi=Math.floor(y);let fx=x-xi,fy=y-yi;fx=fx*fx*(3-2*fx);fy=fy*fy*(3-2*fy);
+    const i0=((xi%n)+n)%n,i1=(i0+1)%n,j0=((yi%n)+n)%n,j1=(j0+1)%n;
+    const a=v[j0*n+i0],b=v[j0*n+i1],c=v[j1*n+i0],d=v[j1*n+i1];return a+(b-a)*fx+(c-a)*fy+(a-b-c+d)*fx*fy}}
+function table(f,a,b,step){const n=Math.ceil((b-a)/step)+1,arr=new Float32Array(n);for(let i=0;i<n;i++)arr[i]=f(a+i*step);return{a,step,n,arr}}
+function tl(t,x){let fi=(x-t.a)/t.step;if(fi<0)fi=0;else if(fi>t.n-1.001)fi=t.n-1.001;const i=fi|0;return t.arr[i]+(t.arr[i+1]-t.arr[i])*(fi-i)}
+function tsl(t,x){let fi=(x-t.a)/t.step;if(fi<0)fi=0;else if(fi>t.n-1.001)fi=t.n-1.001;const i=fi|0;return(t.arr[i+1]-t.arr[i])/t.step}
+
+// ---------- skull generator ----------
+// Skull frame (u,v) is normalised to an adult skull: u lateral, v rostral, nominal bregma at 0, nominal lambda at -4.21.
+function makeSkull(seed, age, ov){
+  ov = ov || {};
+  const r = mulberry32(seed), g = () => gauss(r);
+  const P = {seed, age};
+  P.BLnom = blOfAge(age);
+  P.sc = P.BLnom * (1 + 0.03 * clamp(g(), -2, 2)) / ADULT_BL;
+  let yaw = clamp(g() * 4, -9, 9); if (ov.yaw != null) yaw = ov.yaw;
+  P.yaw = yaw; P.tx = g() * 0.3; P.ty = 0.3 + g() * 0.3;
+  let pitch = clamp(g() * 1.0, -2.5, 2.5), roll = clamp(g() * 0.8, -2, 2);
+  if (ov.tilt != null){ const m = Math.hypot(pitch, roll) || 1; pitch = pitch / m * ov.tilt; roll = roll / m * ov.tilt; }
+  P.pitch = pitch; P.roll = roll;
+
+  let corOff = clamp(g() * 0.16, -0.4, 0.4); if (ov.corOff != null) corOff = (corOff < 0 ? -1 : 1) * ov.corOff;
+  let corCurv = 0.06 + r() * 0.10; if (ov.corCurv != null) corCurv = ov.corCurv;
+  P.cor = {off: corOff, curv: corCurv, slL: (r() - .5) * .3, slR: (r() - .5) * .3, wa: .03 + r() * .05, za: .017 + r() * .014, zf: .07 + r() * .04};
+  let amb = Math.pow(r(), 1.3); if (ov.amb != null) amb = ov.amb;
+  P.lam = {curv: .05 + r() * .10, sl: .05 + r() * .2, asym: (r() - .5) * .12, off: g() * .06, amb, wa: .03 + amb * .05 + r() * .02, za: .019 + r() * .014, zf: .07 + r() * .04};
+  P.sag = {wa: .02 + r() * .035, za: .014 + r() * .010, zf: .06 + r() * .03};
+  P.occ = {d: 1.5 + r() * .4, curv: .10 + r() * .06, za: .012};
+  let sinusOff = clamp(g() * .09, -.22, .22); if (ov.sinusOff != null) sinusOff = ov.sinusOff;
+  P.sinus = {off: sinusOff, w: .14 + r() * .08};
+  let tissue = r() * .5; if (ov.tissue != null) tissue = ov.tissue;
+  P.tissue = tissue; P.blood = r();
+  P.trans = clamp(1.15 - (age - 4) * .03, .6, 1.1);
+  P.sutW = .013 - (age - 4) * .0003;
+
+  // noise sources
+  const nSag = noise1(r), nCL = noise1(r), nCR = noise1(r), nLL = noise1(r), nLR = noise1(r), nO = noise1(r);
+  const zS = [noise1(r), r() * 6.28, r() * 6.28], zC = [noise1(r), r() * 6.28, r() * 6.28], zL = [noise1(r), r() * 6.28, r() * 6.28], zO = [noise1(r), r() * 6.28, r() * 6.28];
+  const nStr = [noise1(r), noise1(r), noise1(r)];
+  const zig = (t, A, f, z) => A * (.32 * Math.sin(6.2832 * t / f + z[1] + 1.8 * z[0](t / (f * 3.1) + 50)) + .38 * Math.sin(6.2832 * t / (f * .43) + z[2]) + .75 * z[0](t / (f * .55)) + .25 * z[0](t / (f * .18) + 90));
+
+  const C = P.cor, L = P.lam, S = P.sag, O = P.occ;
+  const jL = C.off / 2, jR = -C.off / 2;
+  // macro paths (what the Paxinos fit uses)
+  const sagM = v => S.wa * nSag(v / .9 + 20);
+  const corLM = u => jL + C.curv * u * u + C.slL * Math.abs(u) + C.wa * nCL(Math.abs(u) / .7);
+  const corRM = u => jR + C.curv * u * u + C.slR * Math.abs(u) + C.wa * nCR(Math.abs(u) / .7);
+  const lamLM = u => -ADULT_BL + L.off / 2 - L.curv * u * u - L.sl * Math.abs(u) + L.asym * u + L.wa * nLL(Math.abs(u) / .6);
+  const lamRM = u => -ADULT_BL - L.off / 2 - L.curv * u * u - L.sl * Math.abs(u) + L.asym * u + L.wa * nLR(Math.abs(u) / .6);
+  const occM = u => -ADULT_BL - O.d + O.curv * u * u + .03 * nO(u / .8);
+  P.m = {sagM, corLM, corRM, lamLM, lamRM, occM};
+
+  // rendered paths (macro + interdigitation), tabulated
+  const st = .0025;
+  const dotN = noise1(r);
+  P.t = {
+    sag: table(v => sagM(v) + zig(v, S.za, S.zf, zS), -10, 7, st),
+    corL: table(u => corLM(u) + zig(u, C.za * (.6 + .5 * Math.abs(u)), C.zf, zC), -7, 7, st),
+    corR: table(u => corRM(u) + zig(u + 31, C.za * (.6 + .5 * Math.abs(u)), C.zf, zC), -7, 7, st),
+    lamL: table(u => lamLM(u) + zig(u, L.za, L.zf, zL), -7, 7, st),
+    lamR: table(u => lamRM(u) + zig(u + 17, L.za, L.zf, zL), -7, 7, st),
+    occ: table(u => occM(u) + zig(u, O.za, .09, zO), -7, 7, st),
+    // sagittal reads as a dotted line: strength is punctate along its length
+    sStr: table(v => (.7 + .3 * nStr[0](v / .5)) * (.3 + .7 * smooth(.35, .75, .5 + .5 * Math.sin(6.2832 * v / .11 + 3 * dotN(v / .4)))), -10, 7, .004),
+    cStr: table(u => .75 + .25 * nStr[1](u / .5 + 40), -7, 7, .01),
+    lStr: table(u => (.75 + .25 * nStr[2](u / .5)) * (1 - amb * .92 * Math.exp(-Math.pow(u / (.35 + .5 * amb), 2))), -7, 7, .01),
+  };
+  P.lam0 = (lamLM(0) + lamRM(0)) / 2;
+
+  const c = Math.cos(yaw * Math.PI / 180), s = Math.sin(yaw * Math.PI / 180);
+  P.c = c; P.s = s;
+  P.toWorld = (u, v) => [P.tx + P.sc * (c * u - s * v), P.ty + P.sc * (s * u + c * v)];
+  P.toSkull = (x, y) => { const dx = x - P.tx, dy = y - P.ty; return [(c * dx + s * dy) / P.sc, (-s * dx + c * dy) / P.sc]; };
+  P.fit = paxinosFit(P);
+
+  // surgical-field variants (drawn after the anatomy so they don't reshuffle it)
+  let sutBlood = r() < .3 ? .25 + r() * .45 : r() * .15; if (ov.sutBlood != null) sutBlood = ov.sutBlood;
+  P.sutBlood = sutBlood;
+  P.nBlood = [noise1(r), noise1(r), noise1(r)];
+  let nh = r() < .7 ? 1 + Math.floor(r() * 5) : 0; if (ov.hairs != null) nh = ov.hairs;
+  let lamPatch = r() < .6 ? 1 : 0; if (ov.lamPatch != null) lamPatch = ov.lamPatch;
+  P.lamPatch = lamPatch;
+  const hr = mulberry32(seed ^ 0x4a17), hairs = [];
+  for (let k = 0; k < nh; k++){
+    const sd = hr() < .5 ? -1 : 1, v0 = 2 - hr() * 8, u0 = sd * (2.3 + hr() * 1.1);
+    const a = (sd < 0 ? 0 : Math.PI) + (hr() - .5) * 1.6, len = 1.5 + hr() * 3;
+    const bend = (hr() - .5) * len * .6, pts = [];
+    const ex = u0 + Math.cos(a) * len, ey = v0 + Math.sin(a) * len;
+    const mx = (u0 + ex) / 2 - Math.sin(a) * bend, my = (v0 + ey) / 2 + Math.cos(a) * bend;
+    for (let i = 0; i <= 32; i++){ const t = i / 32, q = 1 - t; pts.push(P.toWorld(q*q*u0 + 2*q*t*mx + t*t*ex, q*q*v0 + 2*q*t*my + t*t*ey)); }
+    hairs.push({pts, w: .016 + hr() * .012});
+  }
+  P.hairs = hairs;
+  return P;
+}
+
+// ---------- Paxinos best-fit answer engine ----------
+function solve3(A, b){
+  const M = A.map((row, i) => [...row, b[i]]);
+  for (let i = 0; i < 3; i++){
+    let p = i; for (let k = i + 1; k < 3; k++) if (Math.abs(M[k][i]) > Math.abs(M[p][i])) p = k;
+    [M[i], M[p]] = [M[p], M[i]];
+    for (let k = i + 1; k < 3; k++){ const f = M[k][i] / M[i][i]; for (let j = i; j < 4; j++) M[k][j] -= f * M[i][j]; }
+  }
+  const x = [0, 0, 0];
+  for (let i = 2; i >= 0; i--){ let s = M[i][3]; for (let j = i + 1; j < 3; j++) s -= M[i][j] * x[j]; x[i] = s / M[i][i]; }
+  return x;
+}
+function fitParabola(pts){ // v = c0 + c1 u + c2 u^2
+  const A = [[0,0,0],[0,0,0],[0,0,0]], b = [0,0,0];
+  for (const [u, v] of pts){ const f = [1, u, u*u]; for (let i = 0; i < 3; i++){ b[i] += f[i]*v; for (let j = 0; j < 3; j++) A[i][j] += f[i]*f[j]; } }
+  return solve3(A, b);
+}
+function paxinosFit(P){
+  const {sagM, corLM, corRM, lamLM, lamRM, occM} = P.m;
+  let n = 0, sv = 0, su = 0, svv = 0, svu = 0;
+  for (let v = P.lam0 + .2; v <= 2.5; v += .02){ const u = sagM(v); n++; sv += v; su += u; svv += v*v; svu += v*u; }
+  const bb = (n*svu - sv*su) / (n*svv - sv*sv), aa = (su - bb*sv) / n;
+  const nrm = Math.hypot(1, bb), eu = [1/nrm, -bb/nrm], ev = [bb/nrm, 1/nrm], O = [aa, 0];
+  const toF = (u, v) => { const du = u - O[0], dv = v - O[1]; return [du*eu[0] + dv*eu[1], du*ev[0] + dv*ev[1]]; };
+  const fromF = (a, b) => [O[0] + a*eu[0] + b*ev[0], O[1] + a*eu[1] + b*ev[1]];
+  const corPts = [], lamPts = [];
+  for (let u = .08; u <= 2.4; u += .04){ corPts.push(toF(-u, corLM(-u)), toF(u, corRM(u))); lamPts.push(toF(-u, lamLM(-u)), toF(u, lamRM(u))); }
+  const cc = fitParabola(corPts), lc = fitParabola(lamPts);
+  const bN = fromF(0, cc[0]), lN = fromF(0, lc[0]);
+  const B = P.toWorld(...bN), Lw = P.toWorld(...lN);
+  const W = p => P.toWorld(...p);
+  const curve = (co, span) => { const out = []; for (let a = -span; a <= span + 1e-6; a += .05) out.push(W(fromF(a, co[0] + co[1]*a + co[2]*a*a))); return out; };
+  const line = []; for (let t = 2.8; t >= P.lam0 - 1.2; t -= .1) line.push(W(fromF(0, t)));
+  return {
+    B, L: Lw, BL: Math.hypot(B[0] - Lw[0], B[1] - Lw[1]),
+    sagLine: line, corCurve: curve(cc, 2.6), lamCurve: curve(lc, 2.4),
+    corPts: corPts.filter((_, i) => i % 6 === 0).map(p => W(fromF(...p))),
+    lamPts: lamPts.filter((_, i) => i % 6 === 0).map(p => W(fromF(...p))),
+    jLeft: P.toWorld(sagM(corLM(0)), corLM(0)), jRight: P.toWorld(sagM(corRM(0)), corRM(0)),
+    occMid: P.toWorld(sagM(occM(0)), occM(0)),
+  };
+}
+
+// ---------- texture baking ----------
+// Window: long almond-shaped skin opening, in skull frame.
+function windowShape(P, r){
+  const nW2 = noise2(r);
+  const a0 = (2.75 + (r() - .5) * .4), b0 = 5.7 + (r() - .5) * .5, cy = -2.2 + (r() - .5) * .3;
+  return (u, v) => {
+    const vn = (v - cy) / b0, th = Math.atan2(vn, u / a0), ct = Math.cos(th), stt = Math.sin(th);
+    const jag = 1 + .07 * (nW2(ct * 1.4 + 20, stt * 1.4 + 20) - .5) + .05 * (nW2(ct * 5 + 40, stt * 5 + 40) - .5);
+    const aEff = a0 * Math.pow(Math.max(0, 1 - vn * vn), .72) * jag;
+    const edge = Math.min(aEff - Math.abs(u), (b0 * jag - Math.abs(v - cy)) * .6);
+    return clamp(.5 + edge * P.sc / 1.6, 0, 1);
+  };
+}
+function bakeHi(P){
+  const A = new Uint8Array(HI * HI * 4), Bt = new Uint8Array(HI * HI * 4), plate = new Uint8Array(HI * HI);
+  const px = WS / HI, T = P.t, wN = P.sutW / P.sc, wH = wN * 3.0, reach = wH * 3.2, wS = .055 / P.sc, reachS = wS * 3;
+  const nt = noise2(mulberry32(P.seed ^ 0x9e37)), nm = noise2(mulberry32(P.seed ^ 0x51ed));
+  const {c, s, tx, ty, sc} = P, NB = P.nBlood, sb = P.sutBlood;
+  const prof = d => Math.exp(-(d*d)/(wN*wN)) + .3 * Math.exp(-(d*d)/(wH*wH));
+  const smear = d => Math.exp(-(d*d)/(wS*wS));
+  for (let j = 0; j < HI; j++){
+    const y = WY1 - (j + .5) * px;
+    for (let i = 0; i < HI; i++){
+      const x = WX0 + (i + .5) * px, dx = x - tx, dy = y - ty;
+      const u = (c*dx + s*dy) / sc, v = (-s*dx + c*dy) / sc;
+      const sz = tl(T.sag, v), left = u < sz;
+      const cz = left ? tl(T.corL, u) : tl(T.corR, u);
+      const lz = left ? tl(T.lamL, u) : tl(T.lamR, u);
+      const oz = tl(T.occ, u);
+      let I = 0, Bl = 0, d;
+      d = Math.abs(u - sz);
+      if (d < reach * 2 && v > lz - .05){ const fade = clamp((v - lz) / .03 + .5, 0, 1); const sl = tsl(T.sag, v); const dd = d / Math.sqrt(1 + sl*sl);
+        I = Math.max(I, fade * tl(T.sStr, v) * prof(dd));
+        if (dd < reachS) Bl = Math.max(Bl, fade * sb * .7 * smooth(.1, .8, .5 + .5 * NB[0](v / .35)) * smear(dd)); }
+      d = Math.abs(v - cz);
+      if (d < reach * 2 || d < reachS){ const sl = left ? tsl(T.corL, u) : tsl(T.corR, u); const dd = d / Math.sqrt(1 + sl*sl);
+        I = Math.max(I, tl(T.cStr, u) * prof(dd));
+        // blood pools along the coronal suture, most near the midline (the red band at bregma)
+        Bl = Math.max(Bl, sb * (.3 + .35 * Math.exp(-Math.pow(u / 1.3, 2))) * smooth(.15, .75, .5 + .5 * NB[1](u / .45)) * smear(dd * .8)); }
+      d = Math.abs(v - lz);
+      if (d < reach * 2 || d < reachS){ const sl = left ? tsl(T.lamL, u) : tsl(T.lamR, u); const dd = d / Math.sqrt(1 + sl*sl);
+        I = Math.max(I, tl(T.lStr, u) * prof(dd));
+        Bl = Math.max(Bl, sb * .6 * smooth(.3, .85, .5 + .5 * NB[2](u / .4)) * smear(dd)); }
+      d = Math.abs(v - oz);
+      if (d < reach * 2){ const sl = tsl(T.occ, u); I = Math.max(I, .8 * smooth(0, .15, lz - oz) * prof(d / Math.sqrt(1 + sl*sl))); }
+      let id;
+      if (v > cz) id = left ? 1 : 2; else if (v > lz) id = left ? 3 : 4; else id = (v > oz) ? 5 : 6;
+      let tis = smooth(.6, .86, nt(x * .8 + 9, y * .8 + 9)) * P.tissue;
+      tis += P.tissue * .4 * Math.exp(-Math.pow((v - lz + .25) / .22, 2)) * smooth(.4, .7, nt(x * 2.1, y * 2.1));
+      const m1 = smooth(3.1, 3.5, Math.abs(u) + .1 * (v + 2.2) + .25 * (nm(x * 1.5, y * 1.5) - .5));
+      const m2 = smooth(.05, .5, oz - v + .25 * (nm(x * 2 + 5, y * 2) - .5));
+      const k = (j * HI + i) * 4;
+      A[k] = Math.min(255, I * 255); A[k+1] = Math.min(255, Bl * 255); A[k+3] = id * 40;
+      Bt[k] = Math.max(m1, m2) * 255; Bt[k+1] = Math.min(255, tis * 255); Bt[k+3] = 255;
+      plate[j * HI + i] = id;
+    }
+  }
+  return {A, B: Bt, plate};
+}
+
+function bakeLo(P){
+  const N = HI, k = N / WS, {c, s, tx, ty, sc} = P, r = mulberry32(P.seed ^ 0x2c1b);
+  const mk = () => { const cv = document.createElement('canvas'); cv.width = cv.height = N; const x = cv.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, N, N);
+    x.setTransform(k*sc*c, -k*sc*s, -k*sc*s, -k*sc*c, k*(tx - WX0), k*(WY1 - ty)); x.lineCap = 'round'; x.lineJoin = 'round'; x.globalCompositeOperation = 'lighten'; return {cv, x}; };
+  const S = mk(), V = mk(), Bl = mk();
+  const soft = (ctx, pts, wf, val, passes) => {
+    for (const [m, a] of passes || [[1.8, .2], [1.3, .5], [1, 1]]){
+      const g = Math.round(val * a); ctx.strokeStyle = `rgb(${g},${g},${g})`;
+      for (let i = 1; i < pts.length; i++){ ctx.lineWidth = wf(i / pts.length) * m; ctx.beginPath(); ctx.moveTo(...pts[i-1]); ctx.lineTo(...pts[i]); ctx.stroke(); }
+    }
+  };
+  const {sagM, lamLM, lamRM} = P.m, nS = noise1(r), sw = P.sinus.w, so = P.sinus.off;
+  const overlay = {};
+  // superior sagittal sinus: a narrow reddish stripe under the midline
+  const conf = P.lam0 - .3, sss = [];
+  for (let v = 2.6; v >= conf; v -= .04) sss.push([sagM(v) + so + .03 * nS(v / .6), v]);
+  soft(S.x, sss, t => sw * (.8 + .5 * t), 235); overlay.sss = sss;
+  // confluence and transverse sinuses: the redder back end
+  const cx0 = sss[sss.length - 1][0];
+  const grd = S.x.createRadialGradient(cx0, conf - .25, 0, cx0, conf - .25, 1.6);
+  grd.addColorStop(0, 'rgb(150,150,150)'); grd.addColorStop(1, 'rgb(0,0,0)');
+  S.x.fillStyle = grd; S.x.beginPath(); S.x.ellipse(cx0, conf - .25, 1.6, 1.0, 0, 0, 6.283); S.x.fill();
+  for (const sd of [-1, 1]){
+    const pts = [[cx0, conf]];
+    for (let u = .05; u <= 4.6; u += .05){ const lm = sd < 0 ? lamLM(-u) : lamRM(u); pts.push([sd * u + so, lm - .4 - .06 * u + .03 * nS(u * 2 + sd * 9)]); }
+    soft(S.x, pts, t => (sw * 2.2) * (1.1 - .3 * t), 215, [[2.2, .25], [1.5, .5], [1, .9]]); overlay[sd < 0 ? 'tsL' : 'tsR'] = pts;
+  }
+  // vessels: cortical branches leave the sinus in smooth tapering arcs, a few enter from the sides,
+  // and some run alongside the sutures near the landmarks, where they are easy to mistake for sutures
+  const dirAt = (pts, i) => { const j = Math.min(i + 1, pts.length - 1), k = j - 1; return Math.atan2(pts[j][1] - pts[k][1], pts[j][0] - pts[k][0]); };
+  const VP = [[2.4, .22], [1.5, .5], [1, .85]];
+  const net = [];
+  const arc = (x, y, a, len, w0, val, bend, depth) => {
+    const pts = [[x, y]], step = .025, n = Math.max(4, Math.round(len / step)), ph = r() * 400;
+    for (let i = 0; i < n; i++){
+      a += bend * step + .11 * nS(ph + i * step / .18);
+      if (r() < .035) a += (r() - .5) * .9;              // vessels kink rather than curve evenly
+      x += Math.cos(a) * step; y += Math.sin(a) * step; pts.push([x, y]);
+    }
+    soft(V.x, pts, t => w0 * (1 - .6 * t) * (.7 + .6 * (.5 + .5 * nS(ph + 77 + t * len * 4))), val, VP);
+    for (let i = 2; i < pts.length; i += 6) net.push(pts[i]);
+    if (depth < 2){
+      const nf = depth === 0 ? 1 + Math.floor(r() * 2.5) : (r() < .5 ? 1 : 0);
+      for (let f = 0; f < nf; f++){
+        const i = Math.floor(n * (.25 + r() * .5)), sg = r() < .5 ? -1 : 1;
+        arc(pts[i][0], pts[i][1], dirAt(pts, i) + sg * (.45 + r() * .5), len * (.35 + r() * .3), w0 * .6 * (1 - .65 * i / n), val * .9, -bend * .5 + (r() - .5) * .5, depth + 1);
+      }
+    }
+    return pts;
+  };
+  for (let v = 2.3; v > P.lam0 + .15; v -= .4 + r() * .45){
+    for (const sd of [-1, 1]) if (r() < .8){
+      const tilt = (r() - .35) * .9, a = sd < 0 ? Math.PI - tilt : tilt;
+      arc(sagM(v) + so + sd * sw * .45, v, a, 1.4 + r() * 1.8, .024 + r() * .012, 200 + r() * 40, sd * (r() - .5) * .8, 0);
+    }
+  }
+  for (const sd of [-1, 1]) for (let i = 0; i < 3; i++)
+    arc(sd * 3.4, 1.5 - r() * 7.5, (sd < 0 ? 0 : Math.PI) + (r() - .5) * .8, 1 + r() * 1.2, .026, 170, (r() - .5) * .6, 1);
+  // fine network: small, wandering vessels linking the larger branches
+  for (let k = 0; k < 110 && net.length; k++){
+    const p0 = net[Math.floor(r() * net.length)];
+    const pts = [[p0[0], p0[1]]]; let a = r() * 6.283, x = p0[0], y = p0[1];
+    const n = 8 + Math.floor(r() * 18), ph = r() * 400;
+    for (let i = 0; i < n; i++){ a += (r() - .5) * .9 + .2 * nS(ph + i * .3); x += Math.cos(a) * .022; y += Math.sin(a) * .022; pts.push([x, y]); }
+    soft(V.x, pts, () => .009 + r() * .005, 120 + r() * 60, [[2, .25], [1, .8]]);
+  }
+  const {corLM, corRM} = P.m;
+  const along = (f, u0, sd, len, dv, val) => { const pts = []; for (let u = u0; Math.abs(u - u0) <= len; u += sd * .03) pts.push([u, f(u) + dv + .02 * nS(u * 3 + dv * 40)]); soft(V.x, pts, t => .024 * (1 - .5 * t), val, VP); };
+  for (const sd of [-1, 1]){
+    if (r() < .6) along(sd < 0 ? corLM : corRM, sd * (.12 + r() * .4), sd, 1 + r() * 1.2, (r() < .5 ? -1 : 1) * (.12 + r() * .22), 185);
+    if (r() < .6) along(sd < 0 ? lamLM : lamRM, sd * (.12 + r() * .4), sd, .8 + r() * 1.2, (r() < .5 ? -1 : 1) * (.14 + r() * .22), 185);
+  }
+  if (r() < .5){ const sd = r() < .5 ? -1 : 1; arc(sagM(.3) + so + sd * .12, .15 + r() * .4, sd < 0 ? Math.PI + .5 : -.5, 1 + r(), .022, 175, (r() - .5) * .6, 1); }
+  // blood: a few spots at the skin edge, an optional emissary bleed near lambda
+  Bl.x.fillStyle = '#fff';
+  const nb = Math.round(P.blood * 4);
+  for (let i = 0; i < nb; i++){ const a = r() * 6.283, u = Math.cos(a) * 2.6, v = -2.2 + Math.sin(a) * 5.4; Bl.x.globalAlpha = .6 + r() * .4; Bl.x.beginPath(); Bl.x.arc(u, v, .05 + r() * .16, 0, 6.283); Bl.x.fill(); }
+  if (P.blood > .55){ Bl.x.globalAlpha = .85; Bl.x.beginPath(); Bl.x.arc(sagM(P.lam0) + (r() - .5) * .8, P.lam0 - .25 - r() * .35, .05 + r() * .06, 0, 6.283); Bl.x.fill(); }
+  Bl.x.globalAlpha = 1;
+
+  const sd = S.x.getImageData(0, 0, N, N).data, vd = V.x.getImageData(0, 0, N, N).data, bd = Bl.x.getImageData(0, 0, N, N).data;
+  const out = new Uint8Array(N * N * 4), mask = new Float32Array(MO * MO);
+  const win = windowShape(P, r), px = WS / N;
+  for (let j = 0; j < N; j++){
+    const y = WY1 - (j + .5) * px;
+    for (let i = 0; i < N; i++){
+      const x = WX0 + (i + .5) * px, dx = x - tx, dy = y - ty;
+      const m = win((c*dx + s*dy) / sc, (-s*dx + c*dy) / sc);
+      const k4 = (j * N + i) * 4;
+      out[k4] = sd[k4]; out[k4+1] = vd[k4]; out[k4+2] = m * 255; out[k4+3] = bd[k4];
+      if ((i & 7) === 4 && (j & 7) === 4) mask[(j >> 3) * MO + (i >> 3)] = m;
+    }
+  }
+  const W = p => P.toWorld(p[0], p[1]);
+  return {data: out, mask, overlay: {sss: overlay.sss.map(W), tsL: overlay.tsL.map(W), tsR: overlay.tsR.map(W)}};
+}
+
+// ---------- WebGL ----------
+const glc = $('#gl'), ovc = $('#ov'), stage = $('#stage');
+const gl = glc.getContext('webgl2', {antialias: false, premultipliedAlpha: false});
+const octx = ovc.getContext('2d');
+if (!gl){ const d = document.createElement('div'); d.className = 'nogl'; d.textContent = 'This trainer needs WebGL2. Open it in a current version of Chrome, Edge, Firefox or Safari.'; stage.appendChild(d); $('#loading').hidden = true; return; }
+
+const VS = `#version 300 es
+in vec2 aP; void main(){ gl_Position = vec4(aP, 0., 1.); }`;
+const FS = `#version 300 es
+precision highp float;
+uniform sampler2D uHi, uHi2, uLo, uMo;
+uniform vec2 uRes, uCenter;
+uniform float uMmPx, uSc, uDof, uTrans, uFieldR, uPressPlate;
+uniform vec4 uW, uSk;
+uniform vec3 uPress, uGround;
+uniform vec2 uTilt;
+out vec4 o;
+float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vn(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.-2.*f);
+  return mix(mix(hash(i), hash(i+vec2(1,0)), u.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), u.x), u.y); }
+float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 4; i++){ s += a * vn(p); p = p * 2.03 + 17.1; a *= .5; } return s / .9375; }
+vec2 toUV(vec2 w){ return vec2((w.x - uW.x) / uW.z, (uW.y - w.y) / uW.w); }
+vec2 toSk(vec2 w){ vec2 d = w - uSk.xy; return vec2(uSk.z*d.x + uSk.w*d.y, -uSk.w*d.x + uSk.z*d.y); }
+float plateAt(vec2 w){ vec2 uv = clamp(toUV(w), 0., .9999); return floor(texelFetch(uHi, ivec2(uv * 2048.), 0).a * 255. / 40. + .5); }
+float dome(vec2 w){ vec2 s = toSk(w); float vc = -2.1 * uSc;
+  return -(.055 * s.x * s.x + .013 * (s.y - vc) * (s.y - vc)) + tan(uTilt.x) * s.y + tan(uTilt.y) * s.x; }
+// how far each plate gives under pressure (frontal L/R, parietal L/R, interparietal, occipital):
+// neighbours always differ, so every seam inside the pressed area shows a step
+float give(float p){ return p < 1.5 ? .030 : p < 2.5 ? .013 : p < 3.5 ? .006 : p < 4.5 ? .022 : p < 5.5 ? .034 : .010; }
+float pressF(vec2 w){ vec2 d = w - uPress.xy; return uPress.z * exp(-dot(d, d) / 3.2); }
+float heightAt(vec2 w){ float h = dome(w);
+  if (uPress.z > .001) h -= pressF(w) * give(plateAt(w));
+  return h; }
+void main(){
+  vec2 p = gl_FragCoord.xy - uRes * .5; float rr = length(p);
+  if (rr > uFieldR + 2.){ o = vec4(uGround, 1.); return; }
+  vec2 w = uCenter + p * uMmPx;
+  vec2 uv = toUV(w); vec2 sk = toSk(w);
+  float zc = dome(uCenter), z = dome(w);
+  float lod0 = log2(max(uMmPx / (uW.z / 2048.), 1e-4));
+  float blur = clamp(pow(abs(z - zc) / uDof, 1.4) * 1.3, 0., 4.);
+  float lod = max(lod0, blur);
+  vec4 hi = textureLod(uHi, uv, lod);
+  vec4 hi2 = textureLod(uHi2, uv, lod);
+  vec4 lo = textureLod(uLo, uv, lod);
+  vec4 deep = textureLod(uLo, uv, lod + 1.2);
+  vec3 mo = texture(uMo, uv).rgb;
+  float wet = mo.r, hyd = mo.g, gunk = mo.b;
+  float hydr = max(hyd, min(wet * 4., 1.));
+  float sut = hi.r, sblood = hi.g, mus = hi2.r, tis = hi2.g;
+  float mask = lo.b, sinus = deep.r, ves = textureLod(uLo, uv, lod + .8).g, blood = lo.a;
+  float aa = 1. - smoothstep(.004, .012, uMmPx);
+  float n1 = fbm(w * 3.1), n2 = fbm(w * 18. + 7.), grain = vn(w * 60.), pores = smoothstep(.64, .92, vn(w * 95.));
+  float T = uTrans * mix(.2, 1., hydr) * (.85 + .3 * n1) + .22 * smoothstep(.02, .3, wet);
+  float blanch = 0., seam = 0.;
+  if (uPress.z > .001){
+    blanch = pressF(w);
+    // a seam between plates that moved by different amounts casts a thin shadow
+    float e2 = max(uMmPx * 2., .016), p0 = plateAt(w);
+    float dif = abs(give(plateAt(w + vec2(e2, 0.))) - give(p0)) + abs(give(plateAt(w - vec2(e2, 0.))) - give(p0))
+              + abs(give(plateAt(w + vec2(0., e2))) - give(p0)) + abs(give(plateAt(w - vec2(0., e2))) - give(p0));
+    seam = blanch * smoothstep(0., .012, dif);
+  }
+
+  // bone: warm salmon when hydrated and translucent, paling to chalky when over-dry
+  vec3 boneDry = vec3(.93, .81, .75), boneDamp = vec3(.92, .72, .64);
+  vec3 bone = mix(boneDry, boneDamp, hydr);
+  bone *= .95 + .08 * n1; bone += (grain - .5) * .05 * aa + (n2 - .5) * .03; bone -= pores * .04 * (1. - hydr * .5) * aa;
+  vec3 col = mix(bone, vec3(.92, .58, .52), T * .38);
+  float vv = T * (1. - .85 * blanch);
+  col = mix(col, vec3(.80, .32, .34), clamp(sinus * vv * .42, 0., .45));
+  col = mix(col, vec3(.78, .26, .26), clamp(ves * vv * (.3 + .14 * smoothstep(.02, .3, wet)), 0., .48));
+  col = mix(col, vec3(.97, .93, .90), blanch * .62);
+  // sutures: faint, red-tinged lines; clearest tacky, hidden under film, fading when over-dry
+  // sutures: thinner bone along the seam lets darker tissue show through, so they read as
+  // grey-brown translucent lines; clearest tacky, hidden under film, fading when over-dry
+  float sv = (.18 + .82 * smoothstep(.1, .55, hyd)) * (1. - .8 * smoothstep(.04, .45, wet));
+  sv = clamp(sv + blanch * .55, 0., 1.) * (1. - .9 * smoothstep(.05, .5, gunk));
+  float sa = clamp(sut * sv, 0., 1.);
+  col *= 1. - sa * .42 * vec3(.88, 1., 1.02);
+  col = mix(col, vec3(.40, .33, .31), sa * .16);
+  col = mix(col, col * .62, seam * .55);
+  // blood seeped along the sutures stays visible whatever the moisture
+  col = mix(col, vec3(.76, .18, .19), clamp(sblood * (.38 + .15 * n2), 0., .5));
+  vec3 tcol = mix(vec3(.90, .80, .77), vec3(.95, .88, .85), n2);
+  float fib = .55 + .45 * vn(vec2(sk.x * 6., sk.y * 38.) + n1 * 3.);
+  col = mix(col, tcol, clamp(tis * (.28 + .2 * fib), 0., .5));
+  float stri = .5 + .5 * sin(sk.y * 55. + n2 * 7.);
+  col = mix(col, vec3(.66, .20, .20) * (.85 + .2 * stri), mus * .9);
+  col = mix(col, vec3(.45, .04, .06), clamp(blood * (1. - wet * .3), 0., .95));
+  // wet tissue / fluid patch (over lambda): glistening, pale, hides what's under it
+  float gl = smoothstep(.05, .6, gunk);
+  col = mix(col, vec3(.95, .84, .82) * (.9 + .15 * n2), gl * .35);
+  col *= 1. - .08 * clamp(wet * 2., 0., 1.);
+
+  // around the opening: white-grey fascia at the cut edge, then wet black fur
+  float onBone = smoothstep(.44, .52, mask), fascia = smoothstep(.32, .44, mask);
+  vec3 fas = mix(vec3(.62, .62, .66), vec3(.82, .80, .82), vn(vec2(sk.x * 14., sk.y * 3.))) * (.9 + .12 * n1);
+  fas = mix(fas, vec3(.86, .62, .60), smoothstep(.40, .47, mask) * .5);
+  float strand = mix(.2, pow(vn(vec2(sk.x * 5. + sk.y * 2., sk.y * 70. - sk.x * 20.)), 3.), aa);
+  vec3 fur = vec3(.035, .035, .045) + strand * .10;
+  col = mix(mix(fur, fas, fascia), col, onBone);
+
+  // lighting: dome + plate dip under pressure + saline meniscus
+  float e = max(uMmPx, .007);
+  float hx = heightAt(w + vec2(e, 0.)) - heightAt(w - vec2(e, 0.));
+  float hy = heightAt(w + vec2(0., e)) - heightAt(w - vec2(0., e));
+  vec3 N = normalize(vec3(-hx / (2. * e), -hy / (2. * e), 1.));
+  float du = 1. / 256.;
+  vec2 mg = vec2(texture(uMo, uv + vec2(du, 0.)).r - texture(uMo, uv - vec2(du, 0.)).r,
+                 texture(uMo, uv - vec2(0., du)).r - texture(uMo, uv + vec2(0., du)).r);
+  float wetF = smoothstep(.02, .3, wet) * onBone;
+  vec3 Nb = normalize(N + vec3((vec2(vn(w * 70.), vn(w * 70. + 9.)) - .5) * .25 * onBone * aa, 0.));
+  vec3 Nf = normalize(vec3(N.xy * .5 - mg * .8 + (vec2(vn(w * 9.), vn(w * 9. + 3.)) - .5) * .07, 1.));
+  vec3 Ng = normalize(vec3(N.xy * .5 + (vec2(vn(w * 30.), vn(w * 30. + 5.)) - .5) * .45, 1.));
+  vec3 Nr = normalize(vec3(N.xy + (vec2(vn(w * 24.), vn(w * 24. + 2.)) - .5) * .9, 1.)); // wet fur, clumped
+  N = normalize(mix(Nb, Nf, wetF)); N = normalize(mix(N, Ng, gl * onBone)); N = normalize(mix(N, Nr, 1. - fascia));
+  float shin = mix(mix(mix(6., 18., hyd), 260., wetF), 320., gl * onBone);
+  float ks = mix(mix(mix(.008, .02, hyd), .55, wetF), .45, gl) * onBone + (1. - onBone) * mix(.35 * strand * strand, .05, fascia);
+  shin = mix(160., shin, fascia);
+  vec3 V = vec3(0., 0., 1.); float spec = 0., dif = 0.;
+  for (int i = 0; i < 8; i++){ float a = float(i) * .7854 + .2; vec3 L = normalize(vec3(.62 * cos(a), .62 * sin(a), 1.));
+    spec += pow(max(dot(N, normalize(L + V)), 0.), shin); dif += max(dot(N, L), 0.); }
+  dif /= 8.;
+  col = col * (.45 + .62 * dif) + ks * spec * vec3(1., 1., .97);
+  col += wetF * .05 * (1. - .5 * blanch); // the film's broad gloss
+
+  col *= 1. - .3 * pow(rr / uFieldR, 2.5);
+  col = mix(uGround, col, smoothstep(uFieldR + 1.5, uFieldR - 1.5, rr));
+  o = vec4(clamp(col, 0., 1.), 1.);
+}`;
+function shader(type, src){ const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+const prog = gl.createProgram();
+gl.attachShader(prog, shader(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FS));
+gl.bindAttribLocation(prog, 0, 'aP'); gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+const U = {}; for (const n of ['uHi','uHi2','uLo','uMo','uRes','uCenter','uMmPx','uSc','uDof','uTrans','uFieldR','uPressPlate','uW','uSk','uPress','uGround','uTilt']) U[n] = gl.getUniformLocation(prog, n);
+gl.uniform1i(U.uHi, 0); gl.uniform1i(U.uLo, 1); gl.uniform1i(U.uMo, 2); gl.uniform1i(U.uHi2, 3);
+gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+function mkTex(unit, size, data, mip){
+  const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mip ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  if (mip) gl.generateMipmap(gl.TEXTURE_2D);
+  return t;
+}
+let texHi = null, texHi2 = null, texLo = null;
+const moBytes = new Uint8Array(MO * MO * 4);
+const texMo = mkTex(2, MO, moBytes, false);
+
+// ---------- state ----------
+const store = {
+  get(){ try { return JSON.parse(localStorage.getItem('bregma-bench:v1') || '{}'); } catch { return {}; } },
+  set(o){ try { localStorage.setItem('bregma-bench:v1', JSON.stringify(o)); } catch {} },
+};
+const saved = store.get();
+const St = {
+  mode: 'quiz', tool: 'b',
+  markers: {b: null, l: null}, submitted: false, revealT: 0, gaveUp: false,
+  t0: null, t1: null,
+  view: {cx: 0, cy: -2, mag: 12},
+  cursor: null, pointers: new Map(), drag: null,
+  press: {on: false, x: 0, y: 0, amt: 0, plate: 0},
+  diff: saved.diff || 'medium', age: saved.age || 10,
+  thr: saved.thr || 100, dry: saved.dry || 1,
+  guideOverride: null, ov: {}, overlays: {sutures: false, bones: false, sinus: false, fit: false, truth: false, err: false},
+  seed: 0, skull: null, lo: null, plate: null, hairs: [], hairs0: 0, done: {}, pressedOnce: false, stuckAt: -1e9, busy: false,
+};
+const moW = new Float32Array(MO * MO), moH = new Float32Array(MO * MO), moG = new Float32Array(MO * MO), moMask = new Float32Array(MO * MO), moTmp = new Float32Array(MO * MO);
+
+// ---------- skull lifecycle ----------
+function newSeed(){ return (Math.random() * 1e9) >>> 0 || 1; }
+function build(seed, keepMarkers){
+  St.busy = true; $('#loading').hidden = false;
+  setTimeout(() => {
+    const P = makeSkull(seed, St.age, St.mode === 'explore' ? St.ov : St.mode === 'surgery' ? {yaw: (seed % 300) / 100 - 1.5} : {});
+    const hi = bakeHi(P), lo = bakeLo(P);
+    for (const t of [texHi, texHi2, texLo]) if (t) gl.deleteTexture(t);
+    texHi = mkTex(0, HI, hi.A, true); texHi2 = mkTex(3, HI, hi.B, true); texLo = mkTex(1, HI, lo.data, true);
+    const first = !St.skull;
+    St.skull = P; St.plate = hi.plate; St.lo = lo; St.seed = seed; St.hairs = P.hairs.map(h => ({pts: h.pts.map(p => [p[0], p[1]]), w: h.w, wet: 0, dx: Math.random() - .5, dy: Math.random() - .5})); St.hairs0 = St.hairs.length;
+    initMoisture(P, lo.mask);
+    if (!keepMarkers){ St.done = {}; St.pressedOnce = false; guideSig = ''; St.markers = {b: null, l: null}; St.submitted = false; St.gaveUp = false; St.revealT = 0; St.t0 = St.t1 = null; setTool('b'); }
+    $('#seed').value = seed; sums();
+    syncGenSliders();
+    updateQuizUI();
+    if (first || !keepMarkers) fitView();
+    if (St.mode === 'surgery') sgReset();
+    St.busy = false; $('#loading').hidden = true;
+  }, 30);
+}
+function initMoisture(P, mask){
+  const r = mulberry32(P.seed ^ 0x77aa), n = noise2(r);
+  moMask.set(mask);
+  // the skull starts dry: wet it with saline, then swab back to tacky
+  for (let j = 0; j < MO; j++) for (let i = 0; i < MO; i++){
+    const q = j * MO + i;
+    moH[q] = clamp(.1 + .15 * n(i / 16, j / 16), 0, 1); moG[q] = 0; moW[q] = 0;
+  }
+  if (P.lamPatch){
+    const [lx, ly] = P.fit.L, cx = lx + gauss(r) * .12, cy = ly + gauss(r) * .12, rad = .45 + r() * .35;
+    brush(cx, cy, rad, (q, f) => { moG[q] = Math.min(1, moG[q] + 1.3 * f * (.75 + .5 * r())); });
+  }
+}
+
+// ---------- moisture simulation ----------
+const cellMm = WS / MO;
+function cellOf(x, y){ return [(x - WX0) / cellMm - .5, (WY1 - y) / cellMm - .5]; }
+function brush(x, y, rad, fn){
+  const [ci, cj] = cellOf(x, y), rc = rad / cellMm * 2.2;
+  for (let j = Math.max(0, Math.floor(cj - rc)); j <= Math.min(MO - 1, Math.ceil(cj + rc)); j++)
+    for (let i = Math.max(0, Math.floor(ci - rc)); i <= Math.min(MO - 1, Math.ceil(ci + rc)); i++){
+      const d2 = ((i - ci) ** 2 + (j - cj) ** 2) * cellMm * cellMm; const f = Math.exp(-d2 / (rad * rad));
+      if (f > .01) fn(j * MO + i, f);
+    }
+}
+function addSaline(x, y, amt, rad){ brush(x, y, rad, (q, f) => { moW[q] = Math.min(1.2, moW[q] + amt * f); }); sgOnSaline(x, y); }
+function swabAt(x, y){
+  sgOnSwab(x, y);
+  // a hair comes away only once saline has floated it loose; a dry hair stays stuck
+  const near = h => h.pts.some(p => (p[0] - x) ** 2 + (p[1] - y) ** 2 < .2);
+  St.hairs = St.hairs.filter(h => { if (!near(h)) return true; if (h.wet > .1) return false; St.stuckAt = performance.now(); return true; });
+  brush(x, y, .45, (q, f) => {
+    moW[q] *= 1 - .88 * f;
+    if (moW[q] < .03) moH[q] = Math.max(0, moH[q] - .004 * f);   // rubbing dry bone dries it further
+    moG[q] = Math.max(0, moG[q] - .07 * f);                        // tissue patch takes a few passes
+  });
+}
+function stepMoisture(dt){
+  const sp = St.dry, D = Math.min(.2, 5 * dt);
+  moTmp.set(moW);
+  for (let j = 1; j < MO - 1; j++) for (let i = 1; i < MO - 1; i++){
+    const q = j * MO + i, w = moTmp[q];
+    const nb = moTmp[q - 1] + moTmp[q + 1] + moTmp[q - MO] + moTmp[q + MO];
+    const mob = smooth(.12, .5, Math.max(w, nb * .25));
+    let nw = w + D * mob * (nb - 4 * w);
+    nw -= (.0035 + (nw < .12 ? .004 : 0)) * sp * dt;       // a film takes minutes to evaporate
+    if (moMask[q] < .4) nw -= nw * .6 * dt;                // wicks into the skin edge
+    moW[q] = nw > 0 ? nw : 0;
+    if (moW[q] > .04) moH[q] += (1 - moH[q]) * 3 * dt;
+    else moH[q] = Math.max(0, moH[q] - .0055 * sp * dt);   // tacky for ~1.5 min, then over-dry
+  }
+  for (let q = 0; q < MO * MO; q++){ const k = q * 4; moBytes[k] = Math.min(255, moW[q] * 255); moBytes[k + 1] = moH[q] * 255; moBytes[k + 2] = moG[q] * 255; }
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, texMo);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, MO, MO, gl.RGBA, gl.UNSIGNED_BYTE, moBytes);
+}
+function wetAt(x, y){ const [ci, cj] = cellOf(x, y); return moW[clamp(Math.round(cj), 0, MO - 1) * MO + clamp(Math.round(ci), 0, MO - 1)]; }
+function stepHairs(dt){
+  for (const h of St.hairs){
+    let m = 0; for (let i = 0; i < h.pts.length; i += 2) m = Math.max(m, wetAt(h.pts[i][0], h.pts[i][1]));
+    h.wet = m; // any stretch of the hair lying in saline floats it loose
+    if (h.wet > .15){ const v = .05 * dt; for (const p of h.pts){ p[0] += h.dx * v; p[1] += h.dy * v; } }
+  }
+}
+function surfaceAt(x, y){
+  const [ci, cj] = cellOf(x, y), i = clamp(Math.round(ci), 0, MO - 1), j = clamp(Math.round(cj), 0, MO - 1), q = j * MO + i;
+  if (moMask[q] < .5) return {s: null};
+  if (moG[q] > .25) return {s: 'wet', text: 'Tissue/fluid patch: swab it clean'};
+  const w = moW[q], h = moH[q];
+  if (w > .12) return {s: 'wet', text: 'Wet: saline film, swab it off'};
+  if (h > .5) return {s: 'tacky', text: 'Tacky: sutures at their sharpest'};
+  if (h > .25) return {s: 'drying', text: 'Drying: sutures starting to fade'};
+  return {s: 'over', text: 'Over-dry: chalky, re-wet with saline'};
+}
+
+// ---------- view ----------
+let cssW = 0, cssH = 0, dpr = 1;
+const fieldR = () => Math.max(40, Math.min(cssW / 2, (cssH - 70) / 2 + 20) - 22);
+const mmPerPx = () => (150 / St.view.mag) / (2 * fieldR());
+const toScreen = (x, y) => [cssW / 2 + (x - St.view.cx) / mmPerPx(), cssH / 2 - (y - St.view.cy) / mmPerPx()];
+const toWorldPt = (sx, sy) => [St.view.cx + (sx - cssW / 2) * mmPerPx(), St.view.cy - (sy - cssH / 2) * mmPerPx()];
+const MAG_MIN = 8, MAG_MAX = 60;
+const magToSlider = m => Math.round(Math.log(m / MAG_MIN) / Math.log(MAG_MAX / MAG_MIN) * 1000);
+const sliderToMag = v => MAG_MIN * Math.pow(MAG_MAX / MAG_MIN, v / 1000);
+function setMag(m, ax, ay){
+  m = clamp(m, MAG_MIN, MAG_MAX);
+  if (ax != null){ const [wx, wy] = toWorldPt(ax, ay); St.view.mag = m; const [nx, ny] = toWorldPt(ax, ay); St.view.cx += wx - nx; St.view.cy += wy - ny; }
+  else St.view.mag = m;
+  clampView(); $('#zoom').value = magToSlider(St.view.mag);
+}
+function clampView(){ St.view.cx = clamp(St.view.cx, WX0 + 1, WX0 + WS - 1); St.view.cy = clamp(St.view.cy, WY1 - WS + 1, WY1 - 1); }
+function fitView(){ if (!St.skull) return; const [x, y] = St.skull.toWorld(0, -2.2); St.view.cx = x; St.view.cy = y; setMag(11); }
+function resize(){
+  const r = stage.getBoundingClientRect(); cssW = r.width; cssH = r.height; dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+  for (const c of [glc, ovc]){ c.width = Math.round(cssW * dpr); c.height = Math.round(cssH * dpr); }
+}
+new ResizeObserver(resize).observe(stage);
+
+// ---------- render ----------
+let hudMag = '';
+function render(){
+  const P = St.skull; if (!P || !texHi) return;
+  gl.viewport(0, 0, glc.width, glc.height);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texHi);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texLo);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, texMo);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, texHi2);
+  gl.uniform2f(U.uRes, glc.width, glc.height);
+  gl.uniform2f(U.uCenter, St.view.cx, St.view.cy);
+  gl.uniform1f(U.uMmPx, mmPerPx() / dpr);
+  gl.uniform1f(U.uSc, P.sc);
+  gl.uniform1f(U.uDof, 12 / Math.pow(St.view.mag, 1.2));
+  gl.uniform1f(U.uTrans, P.trans);
+  gl.uniform1f(U.uFieldR, fieldR() * dpr);
+  gl.uniform4f(U.uW, WX0, WY1, WS, WS);
+  gl.uniform4f(U.uSk, P.tx, P.ty, P.c, P.s);
+  gl.uniform3f(U.uPress, St.press.x, St.press.y, St.press.amt);
+  gl.uniform1f(U.uPressPlate, St.press.plate);
+  gl.uniform3f(U.uGround, 10 / 255, 17 / 255, 18 / 255);
+  const tilt = St.mode === 'surgery' && St.sg ? sgAng() : [P.pitch * Math.PI / 180, P.roll * Math.PI / 180];
+  gl.uniform2f(U.uTilt, tilt[0], tilt[1]);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  drawOverlay();
+  const mt = `${Math.round(St.view.mag)}×`; if (hudMag !== mt){ hudMag = mt; $('#mag-text').textContent = mt; $('#dial').style.setProperty('--p', (magToSlider(St.view.mag) / 1000).toFixed(3)); $('#field-text').textContent = `field ${(150 / St.view.mag).toFixed(1)} mm`; }
+}
+
+const COL = {b: '#f0b44c', l: '#7cc4f5', truth: '#ffffff', fit: '#9fe0c0', sut: '#ffe09a', sinus: '#ff9aa8'};
+function poly(pts, frac){
+  const n = Math.max(2, Math.round(pts.length * (frac == null ? 1 : frac)));
+  octx.beginPath(); pts.slice(0, n).forEach((p, i) => { const [x, y] = toScreen(p[0], p[1]); i ? octx.lineTo(x, y) : octx.moveTo(x, y); }); octx.stroke();
+}
+function marker(p, color, label){
+  const [x, y] = toScreen(p[0], p[1]);
+  octx.strokeStyle = 'rgba(0,0,0,.55)'; octx.lineWidth = 4;
+  octx.beginPath(); octx.moveTo(x - 11, y); octx.lineTo(x - 3, y); octx.moveTo(x + 3, y); octx.lineTo(x + 11, y); octx.moveTo(x, y - 11); octx.lineTo(x, y - 3); octx.moveTo(x, y + 3); octx.lineTo(x, y + 11); octx.stroke();
+  octx.strokeStyle = color; octx.lineWidth = 1.6; octx.stroke();
+  octx.font = '600 12px "IBM Plex Mono", monospace'; octx.fillStyle = color; octx.fillText(label, x + 8, y - 8);
+}
+function ring(p, color, label){
+  const [x, y] = toScreen(p[0], p[1]);
+  octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,0,0,.5)'; octx.beginPath(); octx.arc(x, y, 7, 0, 6.283); octx.stroke();
+  octx.lineWidth = 1.5; octx.strokeStyle = color; octx.stroke();
+  octx.beginPath(); octx.arc(x, y, 1.6, 0, 6.283); octx.fillStyle = color; octx.fill();
+  if (label){ octx.font = '500 11px "IBM Plex Mono", monospace'; octx.fillStyle = color; octx.fillText(label, x + 10, y + 14); }
+}
+function drawHairs(){
+  const mm = mmPerPx();
+  for (const h of St.hairs){
+    const w = Math.max(.8, h.w / mm);
+    octx.lineCap = 'round'; octx.lineJoin = 'round';
+    octx.strokeStyle = 'rgba(8,8,10,.92)'; octx.lineWidth = w; poly(h.pts);
+    if (w > 1.6){ octx.strokeStyle = 'rgba(255,255,255,.28)'; octx.lineWidth = Math.max(.6, w * .25); poly(h.pts); }
+  }
+}
+function drawBezel(){
+  const R = fieldR(), cx = cssW / 2, cy = cssH / 2;
+  const g = octx.createRadialGradient(cx, cy, R, cx, cy, R + 16);
+  g.addColorStop(0, '#040809'); g.addColorStop(.35, '#1a2627'); g.addColorStop(.7, '#101a1b'); g.addColorStop(1, 'rgba(10,17,18,0)');
+  octx.fillStyle = g; octx.beginPath(); octx.arc(cx, cy, R + 16, 0, 6.283); octx.moveTo(cx + R, cy); octx.arc(cx, cy, R, 0, 6.283); octx.fill('evenodd');
+  octx.strokeStyle = 'rgba(140,170,168,.22)'; octx.lineWidth = 1; octx.beginPath(); octx.arc(cx, cy, R + 7, 0, 6.283); octx.stroke();
+}
+function drawOverlay(){
+  const P = St.skull, F = P.fit;
+  octx.setTransform(dpr, 0, 0, dpr, 0, 0); octx.clearRect(0, 0, cssW, cssH);
+  octx.save(); octx.beginPath(); octx.arc(cssW / 2, cssH / 2, fieldR(), 0, 6.283); octx.clip();
+  drawHairs();
+  const ex = St.mode === 'explore', O = St.overlays;
+  if (ex && O.sinus){
+    octx.setLineDash([5, 4]); octx.strokeStyle = COL.sinus; octx.lineWidth = 1.3;
+    poly(St.lo.overlay.sss); poly(St.lo.overlay.tsL); poly(St.lo.overlay.tsR); octx.setLineDash([]);
+  }
+  if (ex && O.sutures){
+    const {sagM, corLM, corRM, lamLM, lamRM, occM} = P.m, W = (u, v) => P.toWorld(u, v), pts = [];
+    octx.strokeStyle = COL.sut; octx.lineWidth = 1.2; octx.globalAlpha = .9;
+    for (let v = 3.6; v >= P.lam0; v -= .05) pts.push(W(sagM(v), v)); poly(pts);
+    const arm = (f, a, b) => { const q = []; for (let u = a; u <= b + 1e-6; u += .05) q.push(W(u, f(u))); poly(q); };
+    arm(corLM, -3.4, 0); arm(corRM, 0, 3.4); arm(lamLM, -3.2, 0); arm(lamRM, 0, 3.2);
+    const occ = []; for (let u = -3.2; u <= 3.2; u += .05){ const lz = u < 0 ? lamLM(u) : lamRM(u); if (occM(u) < lz) occ.push(W(u, occM(u))); } if (occ.length > 1) poly(occ);
+    octx.globalAlpha = 1;
+  }
+  if (ex && O.bones){
+    const labels = [['Frontal', -1.3, 1.3], ['Frontal', 1.3, 1.3], ['Parietal', -1.6, -2.1], ['Parietal', 1.6, -2.1], ['Interparietal', 0, P.lam0 - .75], ['Occipital', 0, P.lam0 - P.occ.d - .7]];
+    octx.font = '500 11px "IBM Plex Sans Condensed", sans-serif'; octx.textAlign = 'center';
+    for (const [t, u, v] of labels){ const [x, y] = toScreen(...P.toWorld(u, v)), tw = octx.measureText(t.toUpperCase()).width; octx.fillStyle = 'rgba(0,0,0,.55)'; octx.fillRect(x - tw / 2 - 5, y - 10, tw + 10, 16); octx.fillStyle = '#e8efe9'; octx.fillText(t.toUpperCase(), x, y + 2); }
+    octx.textAlign = 'start';
+  }
+  const showFit = (ex && O.fit) || (St.submitted && $('#show-construction').checked);
+  const tf = St.submitted && !ex ? St.revealT : 1;
+  if (showFit){
+    octx.strokeStyle = COL.fit; octx.lineWidth = 1.3;
+    octx.setLineDash([6, 4]); poly(F.sagLine, Math.min(1, tf * 2)); octx.setLineDash([]);
+    const t2 = clamp(tf * 2 - .5, 0, 1);
+    if (t2 > 0){ poly(F.corCurve, t2); poly(F.lamCurve, t2);
+      octx.fillStyle = COL.fit; octx.globalAlpha = t2; for (const p of [...F.corPts, ...F.lamPts]){ const [x, y] = toScreen(p[0], p[1]); octx.beginPath(); octx.arc(x, y, 1.8, 0, 6.283); octx.fill(); } octx.globalAlpha = 1; }
+  }
+  const showTruth = (ex && O.truth) || (St.submitted && tf >= .75);
+  if (showTruth){ ring(F.B, COL.truth, 'bregma'); ring(F.L, COL.truth, 'lambda'); }
+  if (St.submitted && tf >= .75){
+    octx.setLineDash([3, 3]); octx.lineWidth = 1.2;
+    for (const k of ['b', 'l']){ const m = St.markers[k]; if (!m) continue; const t = k === 'b' ? F.B : F.L; octx.strokeStyle = COL[k]; const [a, b] = toScreen(...m), [c, d] = toScreen(...t); octx.beginPath(); octx.moveTo(a, b); octx.lineTo(c, d); octx.stroke(); }
+    octx.setLineDash([]);
+  }
+  if (St.markers.b) marker(St.markers.b, COL.b, 'B');
+  if (St.markers.l) marker(St.markers.l, COL.l, 'λ');
+  if (St.mode === 'surgery') drawSurgery();
+  if (St.cursor && !St.busy){
+    const rad = {saline: .6, swab: .45, press: 1.0}[St.tool];
+    if (rad){ const [x, y] = toScreen(...St.cursor); octx.setLineDash([4, 4]); octx.strokeStyle = 'rgba(255,255,255,.55)'; octx.lineWidth = 1; octx.beginPath(); octx.arc(x, y, rad / mmPerPx(), 0, 6.283); octx.stroke(); octx.setLineDash([]); }
+  }
+  octx.restore();
+  drawBezel();
+  // scale bar, top-left inside the field
+  const R = fieldR(), mm = mmPerPx(), want = 100 * mm, opts = [.1, .2, .25, .5, 1, 2, 3];
+  let L = opts[0]; for (const o of opts) if (o <= want) L = o;
+  const len = L / mm, bx = cssW / 2 + R * .38, by = cssH / 2 - R * .72;
+  octx.fillStyle = 'rgba(0,0,0,.5)'; octx.fillRect(bx - 6, by - 19, len + 12, 27);
+  octx.fillStyle = '#e8efe9'; octx.fillRect(bx, by, len, 3);
+  octx.font = '500 11px "IBM Plex Mono", monospace'; octx.fillText(L < 1 ? `${Math.round(L * 1000)} µm` : `${L} mm`, bx, by - 6);
+}
+
+// ---------- interaction ----------
+const TOOL_HINT = {
+  b: 'Click to place bregma. Drag a marker to adjust it.',
+  l: 'Click to place lambda. Drag a marker to adjust it.',
+  saline: 'Click or hold to drip saline. Vessels show through wet bone and hairs float loose, but the film hides the sutures.',
+  swab: 'Drag to wick saline and tissue away and lift floating hairs. Bone turns tacky, then over-dries after a minute or two.',
+  press: 'Hold near a junction. Each plate gives a different amount and the bone blanches, so every seam in the area shows.',
+  pan: 'Drag to move the field. Scroll or pinch to zoom. Right-drag pans with any tool.',
+  pen: 'Click to mark the skull, usually at the target once the arm readout matches it.',
+  drill: 'Hold on the mark to drill. Watch the bone thin and turn pink, and stop the moment it gives.',
+  needle: 'Click inside a finished burr hole to pierce the dura with a 30 G needle.',
+};
+// guidance: Easy gets the step list and hints, Medium hints only, Hard nothing; the switch overrides
+function guideOn(){ return St.guideOverride != null ? St.guideOverride : St.diff === 'easy'; }
+function applyGuidance(){
+  const on = guideOn(), hints = on || St.diff === 'medium';
+  $('#show-guide').checked = on;
+  $('#guide').hidden = $('#guide-tip').hidden = !on;
+  $('#tool-hint').hidden = !hints;
+}
+function setTool(t){ St.tool = t; $$('.tool').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t)); $('#tool-hint').textContent = contextHint(St.cursor && St.skull ? surfaceAt(St.cursor[0], St.cursor[1]) : null); ovc.classList.toggle('pan', t === 'pan'); }
+$$('.tool').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+
+function localPt(e){ const r = ovc.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+function startTimer(){ if (St.mode === 'quiz' && !St.submitted && St.t0 == null) St.t0 = performance.now(); }
+function nearMarker(sx, sy){ for (const k of ['b', 'l']){ const m = St.markers[k]; if (!m) continue; const [x, y] = toScreen(...m); if (Math.hypot(x - sx, y - sy) < 14) return k; } return null; }
+function plateAtWorld(x, y){ const i = clamp(Math.floor((x - WX0) / WS * HI), 0, HI - 1), j = clamp(Math.floor((WY1 - y) / WS * HI), 0, HI - 1); return St.plate[j * HI + i]; }
+
+ovc.addEventListener('contextmenu', e => e.preventDefault());
+ovc.addEventListener('pointerdown', e => {
+  if (St.busy) return;
+  try { ovc.setPointerCapture(e.pointerId); } catch {}
+  const [sx, sy] = localPt(e);
+  St.pointers.set(e.pointerId, [sx, sy]);
+  if (St.pointers.size === 2){
+    const [a, b] = [...St.pointers.values()]; St.drag = {kind: 'pinch', d: Math.hypot(a[0] - b[0], a[1] - b[1]), mag: St.view.mag}; St.press.on = false; return;
+  }
+  const w = toWorldPt(sx, sy);
+  if (e.button === 1 || e.button === 2 || St.tool === 'pan'){ St.drag = {kind: 'pan', sx, sy, cx: St.view.cx, cy: St.view.cy}; ovc.classList.add('dragging'); return; }
+  startTimer();
+  if (St.tool === 'b' || St.tool === 'l'){
+    if (St.submitted && St.mode === 'quiz') return;
+    const k = nearMarker(sx, sy) || St.tool;
+    St.markers[k] = w; St.drag = {kind: 'marker', k};
+    updateQuizUI();
+  } else if (St.tool === 'saline'){ addSaline(w[0], w[1], .9, .6); St.drag = {kind: 'saline'}; }
+  else if (St.tool === 'swab'){ swabAt(w[0], w[1]); St.drag = {kind: 'swab', last: w}; }
+  else if (St.tool === 'pen' || St.tool === 'drill' || St.tool === 'needle'){ if (St.mode === 'surgery') sgPointerDown(St.tool, w); }
+  else if (St.tool === 'press'){ St.pressedOnce = true; St.press.on = true; St.press.x = w[0]; St.press.y = w[1]; St.press.plate = plateAtWorld(w[0], w[1]); St.drag = {kind: 'press'}; }
+});
+ovc.addEventListener('pointermove', e => {
+  const [sx, sy] = localPt(e), w = toWorldPt(sx, sy);
+  St.cursor = w; updateSurface(w);
+  if (St.pointers.has(e.pointerId)) St.pointers.set(e.pointerId, [sx, sy]);
+  const d = St.drag; if (!d) return;
+  if (d.kind === 'pinch' && St.pointers.size === 2){ const [a, b] = [...St.pointers.values()]; setMag(d.mag * Math.hypot(a[0] - b[0], a[1] - b[1]) / d.d, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); }
+  else if (d.kind === 'pan'){ St.view.cx = d.cx - (sx - d.sx) * mmPerPx(); St.view.cy = d.cy + (sy - d.sy) * mmPerPx(); clampView(); }
+  else if (d.kind === 'marker'){ St.markers[d.k] = w; }
+  else if (d.kind === 'swab'){ const [lx, ly] = d.last, dist = Math.hypot(w[0] - lx, w[1] - ly), n = Math.ceil(dist / .1); for (let i = 1; i <= n; i++) swabAt(lx + (w[0] - lx) * i / n, ly + (w[1] - ly) * i / n); d.last = w; }
+  else if (d.kind === 'press'){ St.press.x = w[0]; St.press.y = w[1]; St.press.plate = plateAtWorld(w[0], w[1]); }
+});
+const endPointer = e => {
+  St.pointers.delete(e.pointerId);
+  const d = St.drag;
+  if (d && d.kind === 'marker'){ if (d.k === 'b' && !St.markers.l && St.tool === 'b') setTool('l'); updateQuizUI(); }
+  if (St.pointers.size === 0){ St.drag = null; St.press.on = false; ovc.classList.remove('dragging'); }
+};
+ovc.addEventListener('pointerup', endPointer); ovc.addEventListener('pointercancel', endPointer);
+ovc.addEventListener('pointerleave', () => { St.cursor = null; });
+ovc.addEventListener('wheel', e => { e.preventDefault(); const [sx, sy] = localPt(e); setMag(St.view.mag * Math.exp(-e.deltaY * .0015), sx, sy); }, {passive: false});
+$('#zoom').addEventListener('input', e => setMag(sliderToMag(+e.target.value)));
+$('#zoom-in').addEventListener('click', () => setMag(St.view.mag * 1.25));
+$('#zoom-out').addEventListener('click', () => setMag(St.view.mag / 1.25));
+$('#zoom-fit').addEventListener('click', fitView);
+
+window.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, select')) return;
+  if (sgArmKey(e)) return;
+  const k = e.key.toLowerCase();
+  const tools = {'1': 'b', '2': 'l', '3': 'saline', '4': 'swab', '5': 'press', '6': 'pan', 'b': 'b', 'l': 'l'};
+  if (St.mode === 'surgery') Object.assign(tools, {'7': 'drill', '8': 'needle', '9': 'pen'});
+  if (tools[k]) setTool(tools[k]);
+  else if (k === 'enter' && !$('#submit').disabled && St.mode === 'quiz') submit(false);
+});
+
+function contextHint(s){
+  const t = St.tool;
+  if (St.mode === 'surgery' && St.sgMsg && performance.now() - St.sgMsgAt < 4000) return St.sgMsg;
+  if (t === 'swab' && performance.now() - St.stuckAt < 2500) return 'That hair is stuck. Add saline so it floats loose, then swab it.';
+  if (!s || !s.s) return TOOL_HINT[t];
+  if (t === 'swab' && s.s === 'over') return 'Already dry here. More swabbing over-dries the bone, so add saline first.';
+  if ((t === 'b' || t === 'l') && s.s === 'wet') return 'The film hides the sutures. Swab this area to tacky before you mark.';
+  if ((t === 'b' || t === 'l') && s.s === 'over') return 'Over-dry bone hides the sutures. Add saline, then swab back to tacky.';
+  if (t === 'saline' && s.s === 'wet') return 'Already wet here. Swab it off when you want to see the sutures.';
+  if (t === 'press' && s.s !== 'tacky') return 'Pressing shows the seams best on tacky bone.';
+  return TOOL_HINT[t];
+}
+let lastSurf = 0;
+function updateSurface(w){
+  const now = performance.now(); if (now - lastSurf < 80) return; lastSurf = now;
+  const s = w ? surfaceAt(w[0], w[1]) : {s: null};
+  const colors = {wet: '#86bcd9', tacky: '#93d5a9', drying: '#e2c77c', over: '#ebe4d5'};
+  $('#surf-dot').style.background = s.s ? colors[s.s] : 'var(--faint)';
+  $('#surf-text').textContent = s.s ? s.text : (w ? 'Off the bone' : 'Hover over bone to read the surface');
+  $$('#stages span').forEach(sp => sp.classList.toggle('on', sp.dataset.s === s.s));
+  const h = contextHint(s); if ($('#tool-hint').textContent !== h) $('#tool-hint').textContent = h;
+}
+
+// ---------- quiz ----------
+const fmtT = ms => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const um = mm => Math.round(mm * 1000);
+const GUIDE = [
+  {id: 'wet', label: 'Wet the skull with saline', tip: 'Drip saline over the bone. Wet bone shows the vessels, which helps you orient.'},
+  {id: 'hair', label: 'Clear stray hairs', tip: 'Saline floats a hair loose, then the swab lifts it. A dry hair stays stuck.', skip: () => !St.hairs0},
+  {id: 'patch', label: 'Swab the patch off lambda', tip: 'The glistening patch at the back hides lambda. It takes a few swab passes.', skip: () => !St.skull.lamPatch},
+  {id: 'tacky', label: 'Swab to tacky', tip: 'Wick the film away. The sutures sharpen as the bone turns tacky, and you have a minute or two before it over-dries.'},
+  {id: 'press', label: 'Press to check the seams', tip: 'Hold Press over bregma or lambda. Every plate under your finger gives a different amount, so both coronal arms and the midline show at once.'},
+  {id: 'b', label: 'Mark bregma', tip: 'Follow both coronal arms toward the midline. Bregma is where their best-fit curve crosses it, even if the arms meet at different points.'},
+  {id: 'l', label: 'Mark lambda', tip: 'Extend both lambdoid arms toward the midline. Lambda is the apex of that curve. Watch for vessels running alongside the suture.'},
+  {id: 'submit', label: 'Submit', tip: 'Check the distance between your marks first: about 4.2 mm in an adult.'},
+];
+function guideDone(){
+  const D = St.done, m = St.markers;
+  if (St.skull){
+    let bone = 0, wet = 0, tacky = 0, g = 0;
+    for (let q = 0; q < MO * MO; q++){ if (moMask[q] < .55) continue; bone++; if (moW[q] > .1) wet++; else if (moH[q] > .5) tacky++; if (moG[q] > g) g = moG[q]; }
+    if (wet > bone * .5) D.wet = true;
+    if (St.hairs.length === 0) D.hair = true;
+    if (g < .25) D.patch = true;
+    if (D.wet && tacky > bone * .5) D.tacky = true;
+    if (St.pressedOnce) D.press = true;
+  }
+  return {...D, b: !!m.b, l: !!m.l, submit: St.submitted};
+}
+let guideSig = '';
+function renderGuide(){
+  if (!St.skull) return;
+  const D = guideDone();
+  let cur = null;
+  const items = GUIDE.map((g, i) => {
+    const skip = g.skip && g.skip(), done = !skip && D[g.id];
+    if (!skip && !done && !cur) cur = g;
+    return {g, i, skip, done};
+  });
+  const sig = items.map(x => x.skip ? 's' : x.done ? 'd' : '-').join('') + (cur ? cur.id : '');
+  if (sig === guideSig) return; guideSig = sig;
+  $('#guide').innerHTML = items.map(({g, i, skip, done}) => {
+    const cls = [g.id === 'b' ? 'b' : g.id === 'l' ? 'l' : '', done ? 'done' : '', skip ? 'skip' : '', g === cur ? 'cur' : ''].join(' ');
+    const tag = skip ? 'none here' : (g.id === 'b' ? 'B' : g.id === 'l' ? 'λ' : '');
+    return `<li class="${cls}"><span class="n">${done ? '✓' : i + 1}</span>${g.label}<span class="tag">${tag}</span></li>`;
+  }).join('');
+  $('#guide-tip').textContent = cur ? cur.tip : 'Done. Review the construction, then try the next skull.';
+}
+function updateQuizUI(){
+  const m = St.markers;
+  renderGuide();
+  $('#submit').disabled = !(m.b && m.l) || St.submitted;
+  $('#giveup').disabled = St.submitted;
+  $('#quiz-result').hidden = !(St.submitted && St.mode === 'quiz');
+}
+function submit(gaveUp){
+  if (St.submitted) return;
+  St.submitted = true; St.gaveUp = gaveUp; St.t1 = performance.now(); if (St.t0 == null) St.t0 = St.t1;
+  St.revealT = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 0;
+  writeResult(); updateQuizUI();
+}
+function dirWords(dx, dy){
+  const parts = [];
+  if (Math.abs(dy) >= .015) parts.push(`${um(Math.abs(dy))} µm ${dy > 0 ? 'caudal' : 'rostral'}`);
+  if (Math.abs(dx) >= .015) parts.push(`${um(Math.abs(dx))} µm ${dx > 0 ? 'left' : 'right'}`);
+  return parts.join(' and ');
+}
+function writeResult(){
+  const P = St.skull, F = P.fit, m = St.markers, thr = St.thr / 1000;
+  const eB = m.b ? Math.hypot(m.b[0] - F.B[0], m.b[1] - F.B[1]) : null, eL = m.l ? Math.hypot(m.l[0] - F.L[0], m.l[1] - F.L[1]) : null;
+  const pass = !St.gaveUp && eB != null && eL != null && eB <= thr && eL <= thr;
+  $('#verdict').textContent = pass ? 'Pass' : 'Fail'; $('#verdict').className = 'pill ' + (pass ? 'pass' : 'fail');
+  $('#verdict-note').textContent = St.gaveUp ? 'Answer revealed' : `Both within ${St.thr} µm to pass`;
+  const cell = e => e == null ? '—' : `<span class="${e <= thr ? 'good' : 'bad'}">${um(e)} µm</span>`;
+  const bl = (m.b && m.l) ? Math.hypot(m.b[0] - m.l[0], m.b[1] - m.l[1]) : null;
+  $('#stats').innerHTML = `
+    <tr><td>Bregma error</td><td>${cell(eB)}</td></tr>
+    <tr><td>Lambda error</td><td>${cell(eL)}</td></tr>
+    <tr><td>Your bregma–lambda</td><td>${bl == null ? '—' : bl.toFixed(2) + ' mm'}</td></tr>
+    <tr><td>True bregma–lambda</td><td>${F.BL.toFixed(2)} mm</td></tr>
+    <tr><td>Time</td><td>${fmtT(St.t1 - St.t0)}</td></tr>`;
+  const ex = [], C = P.cor, L = P.lam, sep = Math.hypot(F.jLeft[0] - F.jRight[0], F.jLeft[1] - F.jRight[1]);
+  if (sep >= .08) ex.push(`The left and right coronal sutures meet the midline ${um(sep)} µm apart (the ${C.off > 0 ? 'left' : 'right'} arm is more rostral). Paxinos bregma is where the best-fit curve through both arms crosses the midline, so it sits between the two junctions rather than on either one.`);
+  else ex.push('Both coronal arms reach the midline at nearly the same point, so bregma sits close to the visible junction.');
+  if (C.curv > .12) ex.push('The coronal suture sweeps strongly rostral out laterally. Fit the part within about 2.5 mm of the midline and ignore the far lateral ends.');
+  if (L.amb > .45) ex.push('The lambdoid suture fades out near the midline on this skull. Extend both arms toward the midline: lambda is the apex of that fitted curve, where it crosses the line of the sagittal suture.');
+  else ex.push('The lambdoid arms stay visible up to the midline, so lambda sits at their apex on the sagittal suture.');
+  if (P.lamPatch) ex.push('A wet tissue patch sat over lambda on this skull. Swab it clean before you judge the junction.');
+  if (P.sutBlood > .6) ex.push('Blood had seeped along the sutures here. The red smear is wider than the suture itself, so aim for the centre of the line.');
+  if (Math.abs(P.sinus.off) >= .05) ex.push(`The superior sagittal sinus runs ${um(Math.abs(P.sinus.off) * P.sc)} µm ${P.sinus.off < 0 ? 'left' : 'right'} of the sagittal suture. On wet bone it's easy to follow the vessel instead of the suture.`);
+  if (m.b && eB > thr){
+    let t = `Your bregma was ${dirWords(F.B[0] - m.b[0], F.B[1] - m.b[1]) || 'slightly off'} of the answer.`;
+    if (sep >= .1){ const dl = Math.hypot(m.b[0] - F.jLeft[0], m.b[1] - F.jLeft[1]), dr = Math.hypot(m.b[0] - F.jRight[0], m.b[1] - F.jRight[1]); if (Math.min(dl, dr) < .06) t += ` That's on the ${dl < dr ? 'left' : 'right'} arm's junction, not the best-fit point.`; }
+    ex.push(t);
+  }
+  if (m.l && eL > thr){
+    let t = `Your lambda was ${dirWords(F.L[0] - m.l[0], F.L[1] - m.l[1]) || 'slightly off'} of the answer.`;
+    if (Math.hypot(m.l[0] - F.occMid[0], m.l[1] - F.occMid[1]) < eL) t += ` It's closer to the interparietal–occipital suture, which is about ${(Math.hypot(F.L[0] - F.occMid[0], F.L[1] - F.occMid[1])).toFixed(1)} mm behind lambda.`;
+    ex.push(t);
+  }
+  if (bl != null) ex.push(`Expect about ${P.BLnom.toFixed(2)} mm between bregma and lambda at ${P.age} weeks${P.age < 8 ? ' (an estimate at this age)' : ''}. Checking that distance is a quick sanity test on the bench.`);
+  $('#explain').innerHTML = ex.map(t => `<li>${t}</li>`).join('');
+}
+$('#submit').addEventListener('click', () => submit(false));
+$('#giveup').addEventListener('click', () => submit(true));
+$('#next').addEventListener('click', () => build(newSeed()));
+
+// ---------- explore ----------
+const GEN = [
+  ['corOff', v => `${um(v)} µm`, P => Math.abs(P.cor.off)],
+  ['corCurv', v => v.toFixed(3), P => P.cor.curv],
+  ['amb', v => `${Math.round(v * 100)}%`, P => P.lam.amb],
+  ['sutBlood', v => `${Math.round(v * 100)}%`, P => P.sutBlood],
+  ['sinusOff', v => `${um(v)} µm`, P => P.sinus.off],
+  ['hairs', v => `${v}`, P => P.hairs.length],
+  ['lamPatch', v => v ? 'on' : 'off', P => P.lamPatch],
+  ['tissue', v => `${Math.round(v * 100)}%`, P => P.tissue],
+  ['yaw', v => `${v.toFixed(1)}°`, P => P.yaw],
+  ['tilt', v => `${v.toFixed(1)}°`, P => Math.hypot(P.pitch, P.roll)],
+];
+function syncGenSliders(){
+  const P = St.skull; if (!P) return;
+  for (const [k, f, get] of GEN){ const el = $(`#g-${k}`); el.value = St.ov[k] != null ? St.ov[k] : get(P); $(`#o-${k}`).textContent = f(+el.value); }
+}
+let genTimer = 0;
+for (const [k, f] of GEN){
+  $(`#g-${k}`).addEventListener('input', e => {
+    St.ov[k] = +e.target.value; $(`#o-${k}`).textContent = f(+e.target.value);
+    clearTimeout(genTimer); genTimer = setTimeout(() => build(St.seed, true), 260);
+  });
+}
+for (const k of Object.keys(St.overlays)) $(`#ov-${k}`).addEventListener('change', e => { St.overlays[k] = e.target.checked; });
+function liveErr(){
+  if (St.mode !== 'explore' || !St.overlays.err){ $('#live-err').textContent = ''; return; }
+  const F = St.skull.fit, m = St.markers, p = [];
+  if (m.b) p.push(`bregma ${um(Math.hypot(m.b[0] - F.B[0], m.b[1] - F.B[1]))} µm`);
+  if (m.l) p.push(`lambda ${um(Math.hypot(m.l[0] - F.L[0], m.l[1] - F.L[1]))} µm`);
+  $('#live-err').textContent = p.length ? 'Error: ' + p.join(' · ') : 'Place markers to see your error.';
+}
+function setMode(mode){
+  if (St.mode === mode) return;
+  St.mode = mode;
+  for (const m of ['quiz', 'explore', 'surgery']) $(`#tab-${m}`).setAttribute('aria-selected', mode === m);
+  $('#quiz-task').hidden = mode !== 'quiz';
+  $('#explore-card').hidden = $('#variant-drawer').hidden = mode !== 'explore';
+  const surg = mode === 'surgery';
+  $('#surg-card').hidden = $('#arm').hidden = !surg; $$('.surg-panel').forEach(el => el.hidden = !surg); $('.surg-only').hidden = !surg;
+  if (!surg){ $('#surg-result').hidden = true; St.sg = null; if (['pen', 'drill', 'needle'].includes(St.tool)) setTool('b'); }
+  St.ov = {};
+  build(newSeed());
+}
+$('#tab-quiz').addEventListener('click', () => setMode('quiz'));
+$('#tab-explore').addEventListener('click', () => setMode('explore'));
+$('#tab-surgery').addEventListener('click', () => setMode('surgery'));
+
+// ---------- skull controls & settings ----------
+const persist = () => store.set({diff: St.diff, age: St.age, thr: St.thr, dry: St.dry});
+$$('#diff-seg button').forEach(b => { b.setAttribute('aria-pressed', b.dataset.diff === St.diff); b.addEventListener('click', () => { St.diff = b.dataset.diff; St.guideOverride = null; $$('#diff-seg button').forEach(x => x.setAttribute('aria-pressed', x === b)); persist(); applyGuidance(); sums(); build(newSeed()); }); });
+$('#show-guide').addEventListener('change', e => { St.guideOverride = e.target.checked; applyGuidance(); });
+function sums(){
+  $('#skull-sum').textContent = `${St.diff[0].toUpperCase() + St.diff.slice(1)} · ${St.age} wk · seed ${St.seed}`;
+  $('#settings-sum').textContent = `pass ${St.thr} µm · dry ${St.dry.toFixed(1)}×`;
+}
+function ageText(){ $('#o-age').textContent = `${St.age} weeks`; $('#bl-note').textContent = `Expected bregma–lambda ≈ ${blOfAge(St.age).toFixed(2)} mm${St.age < 8 ? ' (an estimate; published data under 8 weeks is sparse)' : ''}.`; }
+$('#age').value = St.age; ageText();
+$('#age').addEventListener('input', e => { St.age = +e.target.value; ageText(); sums(); });
+$('#age').addEventListener('change', () => { persist(); build(St.mode === 'explore' ? St.seed : newSeed(), St.mode === 'explore'); });
+$('#new-skull').addEventListener('click', () => { St.ov = {}; build(newSeed()); });
+$('#load-seed').addEventListener('click', () => { const v = parseInt($('#seed').value, 10); if (v > 0) build(v >>> 0); });
+$('#seed').addEventListener('keydown', e => { if (e.key === 'Enter') $('#load-seed').click(); });
+$('#thr').value = St.thr; $('#o-thr').textContent = `${St.thr} µm`;
+$('#thr').addEventListener('input', e => { St.thr = +e.target.value; $('#o-thr').textContent = `${St.thr} µm`; persist(); sums(); if (St.submitted) writeResult(); });
+$('#dry').value = St.dry; $('#o-dry').textContent = `${St.dry.toFixed(1)}×`;
+$('#dry').addEventListener('input', e => { St.dry = +e.target.value; $('#o-dry').textContent = `${St.dry.toFixed(1)}×`; persist(); sums(); });
+
+// ---------- surgery run (v2a): zero, level, target, drill, dura, Nanoject ----------
+// Geometry: "head" coords are the skull's own frame (the world x/y the renderer draws, z = skull surface
+// height). The stereotaxic frame sees the head rotated about the interaural (ear-bar) axis by the head's
+// pitch (incisor bar) and roll (ear bars). The arm moves in frame coords; readouts are frame minus zero.
+// Error sizes in the results are a teaching model, labelled as estimates in the UI.
+const TARGETS = {
+  nac: {name: 'Nucleus accumbens core', ap: 1.1, ml: 1.2, dv: 4.5},
+  lv:  {name: 'Lateral ventricle', ap: .5, ml: .75, dv: 2.5},
+  bla: {name: 'Basolateral amygdala', ap: -1.5, ml: 2.75, dv: 4.75},
+  stn: {name: 'Subthalamic nucleus', ap: -1.9, ml: 1.6, dv: 4.4},
+  ca1: {name: 'Dorsal hippocampus, CA1', ap: -2.1, ml: 2.0, dv: 1.4},
+};
+const D2R = Math.PI / 180;
+function headZ(x, y){ const P = St.skull, dx = x - P.tx, dy = y - P.ty, su = P.c * dx + P.s * dy, sv = -P.s * dx + P.c * dy, vc = -2.1 * P.sc; return -(.055 * su * su + .013 * (sv - vc) * (sv - vc)); }
+// parietal/frontal bone ~0.2-0.25 mm, thicker along the midline ridge over the sagittal sinus
+function boneThick(x, y){ const P = St.skull, su = P.c * (x - P.tx) + P.s * (y - P.ty); return .2 + .025 * Math.sin(x * 3.1 + y * 2.3) + .16 * Math.exp(-((su / .55) ** 2)); }
+function sgAng(){ const P = St.skull, sg = St.sg; return [P.pitch * D2R + Math.atan(sg.incisor / 12), P.roll * D2R + Math.atan(sg.ear / 9)]; }
+function toFrame(x, y, z, ang){
+  const [th, ph] = ang || sgAng(), [px, py, pz] = St.sg.pivot;
+  const dx = x - px, dy = y - py, dz = z - pz;
+  const x1 = dx * Math.cos(ph) + dz * Math.sin(ph), z1 = -dx * Math.sin(ph) + dz * Math.cos(ph);
+  const y2 = dy * Math.cos(th) - z1 * Math.sin(th), z2 = dy * Math.sin(th) + z1 * Math.cos(th);
+  return [px + x1, py + y2, pz + z2];
+}
+function toHead(X, Y, Z, ang){
+  const [th, ph] = ang || sgAng(), [px, py, pz] = St.sg.pivot;
+  const y2 = Y - py, z2 = Z - pz;
+  const dy = y2 * Math.cos(th) + z2 * Math.sin(th), z1 = -y2 * Math.sin(th) + z2 * Math.cos(th);
+  const x1 = X - px, dx = x1 * Math.cos(ph) - z1 * Math.sin(ph), dz = x1 * Math.sin(ph) + z1 * Math.cos(ph);
+  return [px + dx, py + dy, pz + dz];
+}
+function holeAt(x, y, margin){ for (const h of St.sg.holes){ if (Math.hypot(x - h.x, y - h.y) < h.r - (margin || 0)) return h; } return null; }
+// what the pipette tip meets straight below frame point (X, Y)
+function sgFloor(X, Y){
+  let hx = X, hy = Y;
+  for (let i = 0; i < 3; i++){ const f = toFrame(hx, hy, headZ(hx, hy)); hx += X - f[0]; hy += Y - f[1]; }
+  const zs = headZ(hx, hy), hole = holeAt(hx, hy, .03);
+  let zh = zs, kind = 'bone';
+  if (hole){
+    if (hole.through){ zh = zs - boneThick(hole.x, hole.y); kind = (hole.dura !== 'intact') ? 'brain' : 'dura'; }
+    else zh = zs - hole.depth;
+  }
+  return {hx, hy, z: toFrame(hx, hy, zh)[2], zSurf: toFrame(hx, hy, zs)[2], kind, hole};
+}
+function vesselAt(x, y){
+  const i = clamp(Math.floor((x - WX0) / WS * HI), 0, HI - 1), j = clamp(Math.floor((WY1 - y) / WS * HI), 0, HI - 1), k = (j * HI + i) * 4;
+  return {sinus: St.lo.data[k], ves: St.lo.data[k + 1]};
+}
+function sgHint(msg){ St.sgMsg = msg; St.sgMsgAt = performance.now(); $('#tool-hint').textContent = msg; }
+
+function sgReset(){
+  const P = St.skull, r = mulberry32(P.seed ^ 0x5eed), B = P.fit.B;
+  const sg = St.sg = {
+    pivot: [B[0], B[1] - 3.8 * P.sc, headZ(B[0], B[1]) - 5.8 * P.sc],
+    T: [0, 0, 0], Z0: [0, 0, 0], zeroXY: null, zeroZ: null,
+    incisor: 0, ear: 0, frameRev: 0, step: .05,
+    notes: [], target: 'nac', hemi: 1, scale: false, tol: .25,
+    holes: [], marks: [], bleeds: [], simT: 0, ff: 1,
+    nj: {rate: 30, vol: 300, nominal: 0, actual: 0, running: false, tested: false, clog: r() < .2, broken: false, injEnd: null, moved: false, tip: null, ang: null},
+    wait: 10, driveSpeed: 1, wSpeed: .5, drive: null,
+    inBrain: false, entry: null, residual: 0, maxDepth: 0, pocket: false, dimpleAt: -1e9,
+    moves: [], wStart: null, wSpeedActual: null, finished: false, pressed: false,
+  };
+  const c = P.toWorld(0, -1.6);
+  sg.T = [c[0], c[1], headZ(c[0], c[1]) + 2.5];
+  sg.T = toFrame(sg.T[0], sg.T[1], sg.T[2]);
+  sg.Z0 = [sg.T[0] - (4 + r() * 6), sg.T[1] - (6 + r() * 8), sg.T[2] - (2 + r() * 5)]; // a display that hasn't been zeroed reads arbitrary numbers
+  $('#surg-result').hidden = true;
+  $('#nj-status').textContent = 'Not tested yet. Expel a pulse in air before lowering.';
+  $('#nj-rebreak').hidden = true;
+  sgSyncInputs(); sgRenderPanel(true);
+}
+function sgSyncInputs(){
+  const sg = St.sg;
+  $('#t-target').value = sg.target; $('#t-scale').checked = sg.scale; $('#t-tol').value = Math.round(sg.tol * 1000);
+  $$('#hemi-seg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.hemi === sg.hemi));
+  $('#nj-rate').value = sg.nj.rate; $('#nj-vol').value = sg.nj.vol; $('#nj-wait').value = sg.wait; $('#nj-speed').value = sg.driveSpeed; $('#nj-wspeed').value = sg.wSpeed;
+  $$('#ff-seg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.ff === sg.ff));
+  $$('#step-seg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.step === sg.step));
+}
+const readout = () => { const sg = St.sg; return {ap: sg.T[1] - sg.Z0[1], ml: sg.T[0] - sg.Z0[0], dv: sg.T[2] - sg.Z0[2]}; };
+function measuredBL(){ const n = lastNotes(); return (n.Bregma && n.Lambda) ? Math.abs(n.Lambda.ap - n.Bregma.ap) : null; }
+function lastNotes(rev){ const o = {}; for (const e of St.sg.notes) if (rev == null || e.rev === rev) o[e.label] = e; return o; }
+function plan(){
+  const sg = St.sg, t = TARGETS[sg.target], bl = measuredBL(), k = sg.scale && bl ? bl / ADULT_BL : 1;
+  return {ap: t.ap * k, ml: sg.hemi * t.ml * k, dv: -t.dv, k};
+}
+function contactNow(){ const sg = St.sg, fl = sgFloor(sg.T[0], sg.T[1]); return {fl, contact: sg.T[2] - fl.z < .004 && !(fl.kind === 'brain' && sg.inBrain)}; }
+
+function sgMove(dx, dy, dz, auto){
+  const sg = St.sg; if (!sg || sg.finished || St.busy) return false;
+  const T = sg.T;
+  if ((dx || dy) && sg.inBrain){ sgHint('The pipette is in the brain. Raise it out before moving AP or ML.'); return false; }
+  if (dx || dy){
+    const here = sgFloor(T[0], T[1]);
+    if (T[2] < here.zSurf - .002){ sgHint('The tip is inside the burr hole. Raise it above the skull before moving sideways.'); return false; }
+    const there = sgFloor(T[0] + dx, T[1] + dy);
+    if (T[2] < there.zSurf){ sgHint('The tip would hit bone. Raise it first.'); return false; }
+    T[0] += dx; T[1] += dy;
+    if (sg.nj.running) sg.nj.moved = true;
+    return true;
+  }
+  const fl = sgFloor(T[0], T[1]);
+  let nz = T[2] + dz;
+  if (fl.kind === 'bone') nz = Math.max(nz, fl.z);
+  else if (fl.kind === 'dura'){
+    // an intact dura dimples under a glass tip; push too far and the tip snaps
+    if (nz < fl.z - .15){ sg.nj.broken = true; fl.hole.dura = 'torn'; sgHint('The glass tip snapped against the intact dura. Pierce the dura with a 30 G needle first.'); }
+    nz = Math.max(nz, fl.z - .15);
+  }
+  nz = Math.max(nz, fl.z - 7);
+  const moved = nz - T[2];
+  if (!moved) return false;
+  const duraZ = fl.z, wasIn = sg.inBrain;
+  T[2] = nz;
+  sg.moves.push({t: sg.simT, d: moved});
+  const nowIn = fl.kind === 'brain' && nz < duraZ;
+  if (!wasIn && nowIn){
+    // entering cortex: slow entry dimples the surface; part of the compression stays until you back off
+    const recent = sg.moves.filter(m => m.t > sg.simT - 1.5 && m.d < 0).reduce((a, m) => a - m.d, 0);
+    const v = auto ? sg.driveSpeed : clamp(recent / 1.5 * 60, .05, 60);
+    const dmax = .05 + .15 / (1 + v / 2);
+    sg.residual = .3 * dmax; sg.pocket = false; sg.dimpleAt = performance.now(); sg.maxDepth = 0;
+    sg.entry = {head: toHead(T[0], T[1], duraZ), hole: fl.hole};
+    if (dmax > .1) sgHint('The surface dimpled before the tip went in. Backing off ~0.05–0.1 mm relieves it.');
+  }
+  sg.inBrain = nowIn;
+  if (nowIn){
+    const depth = duraZ - nz;
+    if (depth > sg.maxDepth) sg.maxDepth = depth;
+    else if (sg.nj.injEnd == null && !sg.nj.running && depth < sg.maxDepth - .05 && sg.maxDepth > .2) sg.pocket = true;
+    if (sg.nj.running) sg.nj.moved = true;
+  }
+  if (wasIn && moved > 0 && sg.nj.injEnd != null && sg.wStart == null) sg.wStart = sg.simT;
+  if (wasIn && !nowIn && sg.nj.injEnd != null){
+    const dur = Math.max(1e-3, sg.simT - (sg.wStart ?? sg.simT));
+    sg.wSpeedActual = sg.maxDepth / dur * 60;
+    sgFinish();
+  }
+  return true;
+}
+function sgZeroXY(){
+  const sg = St.sg, {contact, fl} = contactNow();
+  sg.Z0[0] = sg.T[0]; sg.Z0[1] = sg.T[1];
+  sg.zeroXY = {rev: sg.frameRev, contact, head: [fl.hx, fl.hy]};
+  sgHint(contact ? 'AP and ML zeroed here.' : 'AP and ML zeroed, but the tip isn’t touching the skull, so you may be off bregma in depth of field.');
+}
+function sgZeroZ(){
+  const sg = St.sg, {contact, fl} = contactNow();
+  const blood = sg.bleeds.some(b => !b.cleared && b.A > .03 && Math.hypot(fl.hx - b.x, fl.hy - b.y) < Math.sqrt(b.A / Math.PI));
+  // through blood you can't see the dura, so the zero lands on the clot, a little high
+  if (blood && fl.kind !== 'bone') sg.T[2] += .04 + Math.random() * .05;
+  sg.Z0[2] = sg.T[2];
+  sg.zeroZ = {rev: sg.frameRev, contact, src: fl.kind === 'bone' ? (fl.hole ? 'bone' : 'skull') : (contact ? 'dura' : 'brain'), hole: fl.hole, blood};
+  sgHint(!contact ? 'DV zeroed in air, not on a surface.' : blood ? 'DV zeroed, but blood covered the dura.' : fl.kind === 'skull' || fl.kind === 'bone' ? 'DV zeroed on the skull surface.' : 'DV zeroed at the dura.');
+}
+function sgRecord(label){
+  const sg = St.sg, r = readout(), {contact} = contactNow();
+  sg.notes = sg.notes.filter(e => !(e.label === label && e.rev === sg.frameRev));
+  sg.notes.push({label, ...r, rev: sg.frameRev, contact, zrev: sg.zeroZ ? sg.zeroZ.rev : null});
+  if (!contact) sgHint(`Recorded ${label}, but the tip wasn't touching bone, so the DV is meaningless.`);
+  sgRenderPanel();
+}
+function sgFrameAdjust(which, d){
+  const sg = St.sg; if (sg.inBrain){ sgHint('Never adjust the head while the pipette is in the brain.'); return; }
+  sg[which] = Math.round((sg[which] + d) * 1000) / 1000; sg.frameRev++;
+  // the head rotates under a fixed arm: if the tip was resting on bone, it now presses into or lifts off it
+  const fl = sgFloor(sg.T[0], sg.T[1]); if (sg.T[2] < fl.z) sg.T[2] = fl.z;
+  sgRenderPanel();
+}
+
+// ---- tools: drill, needle, marker pen ----
+function sgPointerDown(tool, w){
+  const sg = St.sg; if (!sg || sg.finished) return;
+  if (tool === 'drill'){
+    let h = St.sg.holes.find(h => Math.hypot(h.x - w[0], h.y - w[1]) < .2);
+    if (!h){ h = {x: w[0], y: w[1], depth: 0, r: .08, through: false, over: 0, plunge: false, dura: 'intact', bledChecked: false}; sg.holes.push(h); }
+    St.drag = {kind: 'drill', hole: h};
+  } else if (tool === 'needle'){
+    const h = holeAt(w[0], w[1]);
+    if (!h){ sgHint('The needle only goes in through a burr hole.'); return; }
+    if (!h.through){ sgHint('Still bone here. Drill a little further until the dura shows.'); return; }
+    if (h.dura === 'intact'){ h.dura = 'pierced'; sgHint('Dura pierced with the 30 G needle.'); if (Math.random() < .12) sgBleed(h.x, h.y, 'ooze'); }
+  } else if (tool === 'pen'){
+    sg.marks.push([w[0], w[1]]); sgHint('Marked the skull.');
+  }
+}
+function sgBleed(x, y, kind){
+  const spec = {sinus: [.05, 20, 2.2], ooze: [.012, 7, .8], mild: [.006, 4, .35]}[kind];
+  St.sg.bleeds.push({x, y, kind, A: .01, rate: spec[0], need: spec[1], max: spec[2], clot: 0, stopped: false, flooded: 0, pressT: 0, cleared: false});
+  sgHint(kind === 'sinus' ? 'Heavy venous bleeding: you hit the sinus. Hold the swab on it and let it clot. Saline keeps it bleeding.' : 'The hole is oozing blood. Swab it and hold pressure.');
+}
+function sgOnSaline(x, y){ if (St.mode !== 'surgery' || !St.sg) return; for (const b of St.sg.bleeds) if (!b.stopped && Math.hypot(x - b.x, y - b.y) < 1){ b.clot *= .5; b.flooded++; } }
+function sgOnSwab(x, y){ if (St.mode !== 'surgery' || !St.sg) return; for (const b of St.sg.bleeds) if (Math.hypot(x - b.x, y - b.y) < Math.sqrt(b.A / Math.PI) + .3){ b.A *= .86; if (b.stopped && b.A < .02) b.cleared = true; } }
+
+function sgStep(dt){
+  const sg = St.sg; if (!sg) return;
+  const sdt = dt * sg.ff; sg.simT += sdt;
+  // drilling is your hand, so it runs in real time
+  const d = St.drag;
+  if (d && d.kind === 'drill' && !sg.finished){
+    const h = d.hole, t = boneThick(h.x, h.y);
+    if (!h.through){
+      h.depth += .065 * dt; h.r = Math.min(.3, .08 + h.depth * 3);
+      if (!h.bledChecked && h.depth > .6 * t){
+        h.bledChecked = true; const v = vesselAt(h.x, h.y);
+        if (v.sinus > 110) sgBleed(h.x, h.y, 'sinus'); else if (v.ves > 90) sgBleed(h.x, h.y, 'ooze'); else if (Math.random() < .15) sgBleed(h.x, h.y, 'mild');
+      }
+      if (t - h.depth < .05 && t - h.depth > 0) sgHint('The bone is paper-thin and turning pink. Ease off.');
+      if (h.depth >= t){ h.through = true; h.depth = t; sgHint('Through the bone. The dura shows at the bottom of the hole.'); }
+    } else {
+      h.over += dt;
+      if (h.over > .4 && !h.plunge){ h.plunge = true; h.dura = 'torn'; sgBleed(h.x, h.y, 'ooze'); sgHint('The burr plunged through the dura into cortex. Stop drilling as soon as the bone gives.'); }
+    }
+  }
+  // bleeding: grows until it clots; pressure from a held swab speeds clotting, flooding with saline slows it
+  for (const b of sg.bleeds){
+    if (b.stopped) continue;
+    b.A = Math.min(b.max, b.A + b.rate * sdt);
+    const pressing = St.drag && St.drag.kind === 'swab' && St.cursor && Math.hypot(St.cursor[0] - b.x, St.cursor[1] - b.y) < Math.sqrt(b.A / Math.PI) + .3;
+    b.clot += sdt * (pressing ? 3 : 1);
+    if (b.clot >= b.need){ b.stopped = true; sgHint('The bleeding has stopped. Swab away what’s left.'); }
+  }
+  // motorised drive (lowering or withdrawing at a set speed)
+  if (sg.drive){
+    const rem = sg.drive.to - sg.T[2], step = Math.sign(rem) * Math.min(Math.abs(rem), sg.drive.speed / 60 * sdt);
+    if (Math.abs(rem) < 1e-4 || !sgMove(0, 0, step, true)) sg.drive = null;
+  }
+  // Nanoject
+  const nj = sg.nj;
+  if (nj.running){
+    const add = nj.rate * sdt / 60;
+    nj.nominal = Math.min(nj.vol, nj.nominal + add);
+    if (!nj.clog && !nj.broken) nj.actual = Math.min(nj.vol, nj.actual + add);
+    if (!sg.inBrain){ nj.running = false; sgHint('The pipette left the brain mid-injection.'); }
+    if (nj.nominal >= nj.vol){ nj.running = false; nj.injEnd = sg.simT; nj.tip = sg.T.slice(); nj.ang = sgAng(); sgHint(`Injection done. Wait ${sg.wait} min before withdrawing.`); }
+  }
+  sg.moves = sg.moves.filter(m => m.t > sg.simT - 5);
+}
+
+// ---- panel ----
+const SGUIDE = [
+  ['zero', 'Zero AP/ML at bregma', 'Drive the tip over bregma with the arrow keys, lower it (S) until the contact light comes on, then Zero AP/ML and Zero DV.'],
+  ['ap', 'Level front-to-back', 'Touch bregma and record it, then touch lambda and record it. Adjust the incisor bar until their DV differs by no more than 0.05 mm.'],
+  ['ml', 'Level side-to-side', 'Touch the skull 2 mm left and right of the midline at your target AP and record both. Adjust the ear bars until they match within 0.1 mm.'],
+  ['rezero', 'Re-zero at bregma', 'Changing the head angle moves bregma under the arm. Go back to bregma and zero again.'],
+  ['target', 'Go to the target and mark it', 'Pick the target, check the bregma–lambda distance, drive the readout to the planned AP and ML, and mark the skull with the pen.'],
+  ['drill', 'Drill the burr hole', 'Hold the drill on the mark. Stop the moment the bone gives and the dura shows.'],
+  ['bleed', 'Stop any bleeding', 'Hold the swab on it. Don’t flood a sinus bleed with saline; let it clot.'],
+  ['dura', 'Pierce the dura', 'Use the 30 G needle in the hole so the glass tip doesn’t snap.'],
+  ['test', 'Test the Nanoject flow', 'Expel a pulse in air. No bead means a clogged tip.'],
+  ['dvzero', 'Zero DV at the dura', 'Lower the tip into the hole until it touches the dura, then Zero DV.'],
+  ['lower', 'Lower to depth', 'Lower to the planned DV. A slow entry dimples the brain; backing off ~0.05–0.1 mm relieves it.'],
+  ['inject', 'Inject', 'Start the Nanoject and keep the arm still.'],
+  ['wait', 'Wait', 'Let the virus spread before withdrawing, or it tracks back up.'],
+  ['withdraw', 'Withdraw slowly', 'Withdraw at about 0.5 mm/min until the tip is out of the brain.'],
+];
+function sgDone(){
+  const sg = St.sg, D = {}, n = lastNotes(sg.frameRev), p = plan(), r = readout();
+  D.zero = !!(sg.zeroXY && sg.zeroZ);
+  D.ap = !!(n.Bregma && n.Lambda && Math.abs(n.Lambda.dv - n.Bregma.dv) <= .05);
+  D.ml = !!(n.Left && n.Right && Math.abs(n.Left.dv - n.Right.dv) <= .1);
+  D.rezero = D.ap && !!(sg.zeroXY && sg.zeroXY.rev === sg.frameRev);
+  const hole = sg.holes.find(h => h.through);
+  D.target = D.rezero && (sg.marks.length > 0 || !!hole) && (!!hole || (Math.abs(r.ap - p.ap) < .02 && Math.abs(r.ml - p.ml) < .02));
+  D.drill = !!hole;
+  D.bleed = D.drill && !sg.bleeds.some(b => !b.stopped);
+  D.dura = !!(hole && hole.dura !== 'intact');
+  D.test = sg.nj.tested;
+  D.dvzero = !!(sg.zeroZ && (sg.zeroZ.src === 'dura' || sg.zeroZ.src === 'brain'));
+  D.lower = sg.inBrain && Math.abs(r.dv - p.dv) < .02 || sg.nj.nominal > 0;
+  D.inject = sg.nj.injEnd != null;
+  D.wait = D.inject && sg.simT - sg.nj.injEnd >= sg.wait * 60;
+  D.withdraw = sg.finished;
+  return D;
+}
+let sgSig = '';
+const fmt = (v, d = 2) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d);
+function sgRenderPanel(force){
+  const sg = St.sg; if (!sg) return;
+  const D = sgDone();
+  let cur = null;
+  const items = SGUIDE.map(([id, label, tip], i) => { const done = D[id]; if (!done && !cur) cur = {id, tip}; return {id, label, i, done}; });
+  const sig = items.map(x => x.done ? 'd' : '-').join('') + (cur ? cur.id : '');
+  if (force || sig !== sgSig){
+    sgSig = sig;
+    $('#sguide').innerHTML = items.map(({id, label, i, done}) => `<li class="${done ? 'done' : ''} ${cur && cur.id === id ? 'cur' : ''}"><span class="n">${done ? '✓' : i + 1}</span>${label}</li>`).join('');
+    $('#sguide-tip').textContent = cur ? cur.tip : 'Run complete.';
+  }
+  $('#sguide-tip').hidden = !guideOn();
+  // notebook
+  const n = lastNotes(sg.frameRev), lines = [];
+  if (n.Bregma && n.Lambda){ const dd = n.Lambda.dv - n.Bregma.dv, ok = Math.abs(dd) <= .05;
+    lines.push(`<li class="${ok ? 'good' : 'bad'}">Front-to-back: λ − B = ${fmt(dd, 3)} mm ${ok ? '(flat)' : ''}</li>`);
+    if (!ok && guideOn()) lines.push(`<li class="note">${dd < 0 ? 'Lambda sits lower, so the nose is up: lower the incisor bar.' : 'Lambda sits higher, so the nose is down: raise the incisor bar.'}</li>`); }
+  if (n.Left && n.Right){ const dd = n.Right.dv - n.Left.dv, ok = Math.abs(dd) <= .1;
+    lines.push(`<li class="${ok ? 'good' : 'bad'}">Side-to-side: R − L = ${fmt(dd, 3)} mm ${ok ? '(level)' : ''}</li>`);
+    if (!ok && guideOn()) lines.push(`<li class="note">${dd < 0 ? 'The right side sits lower: lower the ear-bar tilt.' : 'The right side sits higher: raise the ear-bar tilt.'}</li>`); }
+  const bl = measuredBL(); if (bl != null) lines.push(`<li>Bregma–lambda: ${bl.toFixed(2)} mm (adult reference 4.21)</li>`);
+  if (sg.zeroXY && sg.zeroXY.rev !== sg.frameRev) lines.push('<li class="bad">The head angle changed since you zeroed. Re-zero at bregma.</li>');
+  $('#nb-list').innerHTML = sg.notes.length ? sg.notes.slice(-8).reverse().map(e => `<li${e.rev !== sg.frameRev ? ' class="stale"' : ''}><b>${e.label}</b><span>AP ${fmt(e.ap)} · ML ${fmt(e.ml)} · DV ${fmt(e.dv, 3)}</span></li>`).join('') : '<li class="note">No readings yet.</li>';
+  $('#nb-calc').innerHTML = lines.join('');
+  $('#f-incisor').textContent = `${fmt(sg.incisor)} mm`; $('#f-ear').textContent = `${fmt(sg.ear)} mm`;
+  // target
+  const p = plan(), r = readout();
+  $('#t-plan').innerHTML = `AP <b>${fmt(p.ap)}</b> · ML <b>${fmt(p.ml)}</b> · DV <b>${fmt(p.dv)}</b>${sg.scale ? (bl ? ` <span class="note">(scaled ×${p.k.toFixed(3)})</span>` : ' <span class="note">(record B and λ to scale)</span>') : ''}`;
+  $('#t-delta').textContent = `To go: AP ${fmt(p.ap - r.ap)} · ML ${fmt(p.ml - r.ml)} · DV ${fmt(p.dv - r.dv)}`;
+  // nanoject
+  const nj = sg.nj;
+  $('#nj-bar').style.width = `${(nj.nominal / nj.vol) * 100}%`;
+  $('#nj-prog').textContent = nj.running ? `${Math.round(nj.nominal)} / ${nj.vol} nl` : nj.injEnd != null ? `${nj.vol} nl delivered` : `${nj.vol} nl planned`;
+  $('#nj-wait-t').textContent = nj.injEnd != null ? `Waited ${fmtT((sg.simT - nj.injEnd) * 1000)} of ${sg.wait}:00` : '';
+  $('#nj-inject').disabled = !sg.inBrain || nj.running || nj.injEnd != null;
+  $('#nj-lower').disabled = !sg.zeroZ || nj.running || sg.finished;
+  $('#nj-withdraw').disabled = !sg.inBrain || nj.running;
+  $('#frame-sum').textContent = `incisor ${fmt(sg.incisor)} · ear ${fmt(sg.ear)}`;
+  $('#target-sum').textContent = `${TARGETS[sg.target].name.split(',')[0]} · ${sg.hemi > 0 ? 'right' : 'left'}`;
+}
+function sgRenderHud(){
+  const sg = St.sg; if (!sg) return;
+  const r = readout(), {contact, fl} = contactNow();
+  $('#r-ap').textContent = fmt(r.ap); $('#r-ml').textContent = fmt(r.ml); $('#r-dv').textContent = fmt(r.dv, 3);
+  $('#contact-led').classList.toggle('on', contact);
+  $('#contact-txt').textContent = contact ? (fl.kind === 'bone' ? (fl.hole ? 'touching bone (hole)' : 'touching skull') : 'touching dura') : sg.inBrain ? `in brain · ${(fl.z - sg.T[2]).toFixed(2)} mm` : 'no contact';
+  $('#simclock').textContent = fmtT(sg.simT * 1000);
+}
+
+// ---- results ----
+function sgFinish(){
+  const sg = St.sg, P = St.skull, F = P.fit, t = TARGETS[sg.target], nj = sg.nj;
+  sg.finished = true; sg.drive = null;
+  const ang = nj.ang || sgAng(), tip = nj.tip || sg.T;
+  const trueK = F.BL / ADULT_BL, p = plan(), eu = [P.c, P.s], ev = [-P.s, P.c];
+  const ax = (vx, vy) => [vx * ev[0] + vy * ev[1], (vx * eu[0] + vy * eu[1]) * sg.hemi]; // head xy delta -> [AP, lateral]
+  const B = F.B, Bz = headZ(B[0], B[1]);
+  const tx = B[0] + t.ap * trueK * ev[0] + sg.hemi * t.ml * trueK * eu[0], ty = B[1] + t.ap * trueK * ev[1] + sg.hemi * t.ml * trueK * eu[1];
+  const tz = headZ(tx, ty) - boneThick(tx, ty) - t.dv;
+  const A = toHead(tip[0], tip[1], tip[2], ang);
+  const az = A[2] + (sg.pocket ? 0 : sg.residual);
+  const [eAP, eML] = ax(A[0] - tx, A[1] - ty), eDV = tz - az; // + = too deep
+  const err = Math.hypot(eAP, eML, eDV);
+  // estimated causes, each as an AP / lateral / depth vector
+  const causes = [];
+  const fb = toFrame(B[0], B[1], Bz, ang);
+  causes.push(['Bregma zero', [...ax(sg.Z0[0] - fb[0], sg.Z0[1] - fb[1]), 0]]);
+  if (sg.entry){ const [a, l] = ax(A[0] - sg.entry.head[0], A[1] - sg.entry.head[1]); causes.push(['Head not flat (track tilts)', [a, l, 0]]); }
+  const holeDura = sg.entry && sg.entry.hole ? toFrame(sg.entry.hole.x, sg.entry.hole.y, headZ(sg.entry.hole.x, sg.entry.hole.y) - boneThick(sg.entry.hole.x, sg.entry.hole.y), ang)[2] : sg.Z0[2];
+  causes.push(['DV zero reference', [0, 0, holeDura - sg.Z0[2]]]);
+  if (!sg.pocket) causes.push(['Dimpling (not relieved)', [0, 0, -sg.residual]]);
+  causes.push(['Bregma–lambda scaling', [(p.k - trueK) * t.ap, (p.k - trueK) * t.ml, 0]]);
+  const r = {ap: tip[1] - sg.Z0[1], ml: tip[0] - sg.Z0[0], dv: tip[2] - sg.Z0[2]};
+  causes.push(['Arm positioning', [r.ap - p.ap, (r.ml - p.ml) * sg.hemi, -(r.dv - p.dv)]]);
+  const sum = causes.reduce((s, c) => [s[0] + c[1][0], s[1] + c[1][1], s[2] + c[1][2]], [0, 0, 0]);
+  causes.push(['Other (mounting, curvature)', [eAP - sum[0], eML - sum[1], eDV - sum[2]]]);
+  const mags = causes.map(([k, v]) => [k, Math.hypot(...v)]).filter(c => c[1] > .005).sort((a, b) => b[1] - a[1]);
+  // backflow model: fast injection, short wait and fast withdrawal all push virus up the track
+  const fRate = clamp((nj.rate - 100) / 200, 0, .5);
+  const waited = nj.injEnd != null ? ((sg.wStart ?? sg.simT) - nj.injEnd) / 60 : 0;
+  const fWait = clamp(1 - waited / 10, 0, 1) * .4, fSpeed = clamp(((sg.wSpeedActual || 0) - 1) / 4, 0, .4);
+  const bf = 1 - (1 - fRate) * (1 - fWait) * (1 - fSpeed);
+  const dose = nj.actual * (1 - bf);
+  const hit = err <= sg.tol && dose > 0;
+  const comp = [];
+  for (const h of sg.holes) if (h.plunge) comp.push('The drill plunged through the dura into cortex.');
+  for (const b of sg.bleeds){ if (b.kind === 'sinus') comp.push(`You drilled into a venous sinus${b.flooded ? ', and saline flooding slowed the clotting' : ''}.`); }
+  if (sg.bleeds.some(b => !b.stopped)) comp.push('Bleeding was still active at the end of the run.');
+  if (nj.broken) comp.push('The glass tip snapped on the intact dura. Nothing was delivered.');
+  else if (nj.clog) comp.push(nj.tested ? 'The tip was still clogged. Nothing was delivered.' : 'The tip was clogged and you hadn’t tested the flow. Nothing was delivered.');
+  if (nj.moved) comp.push('The arm moved during the injection, smearing the bolus along the track.');
+  if (sg.zeroZ && sg.zeroZ.blood) comp.push('You zeroed DV with blood covering the dura.');
+  if (sg.zeroZ && sg.zeroZ.src === 'skull') comp.push('DV was zeroed on the skull, not at the dura in the hole, so the depth is off by the bone thickness.');
+  if (fRate > 0) comp.push(`Injection rate ${nj.rate} nl/min is fast enough to push virus back up the track.`);
+  if (fWait > 0) comp.push(`You waited ${waited.toFixed(1)} min before withdrawing (protocol: ${sg.wait} min).`);
+  if (fSpeed > 0) comp.push(`Withdrawal ran at ~${sg.wSpeedActual.toFixed(1)} mm/min; slower (~0.5 mm/min) keeps virus in place.`);
+  if (measuredBL() == null) comp.push('You never recorded both bregma and lambda, so the skull size wasn’t checked.');
+  sg.result = {err, eAP, eML, eDV, hit, mags, bf, dose, comp, tx, ty, tz, A: [A[0], A[1], az], entry: sg.entry && sg.entry.head};
+  sgShowResult();
+}
+function sgShowResult(){
+  const sg = St.sg, R = sg.result, t = TARGETS[sg.target];
+  $('#surg-result').hidden = false;
+  $('#s-verdict').textContent = R.hit ? 'On target' : 'Missed'; $('#s-verdict').className = 'pill ' + (R.hit ? 'pass' : 'fail');
+  $('#s-verdict-note').textContent = `${t.name}, tolerance ${Math.round(sg.tol * 1000)} µm`;
+  const cell = v => `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v * 1000))} µm`;
+  $('#s-stats').innerHTML = `
+    <tr><td>3D error</td><td class="${R.err <= sg.tol ? 'good' : 'bad'}">${Math.round(R.err * 1000)} µm</td></tr>
+    <tr><td>AP (+ rostral)</td><td>${cell(R.eAP)}</td></tr>
+    <tr><td>ML (+ lateral)</td><td>${cell(R.eML)}</td></tr>
+    <tr><td>Depth (+ too deep)</td><td>${cell(R.eDV)}</td></tr>
+    <tr><td>Dose on target</td><td>${Math.round(R.dose)} nl (${Math.round(R.bf * 100)}% backflow)</td></tr>
+    <tr><td>Simulated time</td><td>${fmtT(sg.simT * 1000)}</td></tr>`;
+  const mx = Math.max(.05, ...R.mags.map(m => m[1]));
+  $('#s-causes').innerHTML = R.mags.map(([k, v]) => `<li><span>${k}</span><span class="bar"><i style="width:${(v / mx) * 100}%"></i></span><b>${Math.round(v * 1000)} µm</b></li>`).join('') || '<li class="note">No measurable error sources.</li>';
+  $('#s-comp').innerHTML = R.comp.map(c => `<li>${c}</li>`).join('') || '<li>No complications.</li>';
+  $('#s-track').innerHTML = trackSvg('Sagittal (AP)', 0) + trackSvg('Coronal (ML)', 1);
+  sgRenderPanel(true);
+}
+// side views of the planned vs actual track, drawn in the skull's own axes around the target
+function trackSvg(title, axis){
+  const sg = St.sg, P = St.skull, R = sg.result, eu = [P.c, P.s], ev = [-P.s, P.c], dir = axis ? [eu[0] * sg.hemi, eu[1] * sg.hemi] : ev;
+  const W = 150, H = 170, S = 26, t = TARGETS[sg.target];
+  const along = (x, y) => (x - R.tx) * dir[0] + (y - R.ty) * dir[1];
+  const top = headZ(R.tx, R.ty) + .4, X = a => W / 2 + a * S, Y = z => 12 + (top - z) * S;
+  const surf = [], dura = [];
+  for (let a = -2.6; a <= 2.6; a += .1){ const x = R.tx + dir[0] * a, y = R.ty + dir[1] * a; surf.push([X(a), Y(headZ(x, y))]); dura.push([X(a), Y(headZ(x, y) - boneThick(x, y))]); }
+  const bone = `${surf.map(p => p.join(',')).join(' ')} ${dura.reverse().map(p => p.join(',')).join(' ')}`;
+  const ax_ = along(R.A[0], R.A[1]), en = R.entry ? along(R.entry[0], R.entry[1]) : ax_;
+  const enZ = R.entry ? R.entry[2] : R.A[2] + t.dv;
+  const rInj = Math.cbrt(3 * Math.max(R.dose, 0) / 1000 / (4 * Math.PI)) * S;
+  return `<figure><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title} view of the planned and actual track">
+    <polygon points="${bone}" style="fill:var(--bone)" opacity=".85"/>
+    <line x1="${X(0)}" y1="${Y(headZ(R.tx, R.ty))}" x2="${X(0)}" y2="${Y(R.tz)}" style="stroke:var(--muted)" stroke-dasharray="3 3"/>
+    <circle cx="${X(0)}" cy="${Y(R.tz)}" r="${sg.tol * S}" fill="none" style="stroke:var(--pass)" stroke-dasharray="2 2"/>
+    <line x1="${X(en)}" y1="${Y(enZ)}" x2="${X(ax_)}" y2="${Y(R.A[2])}" style="stroke:var(--lambda)" stroke-width="1.5"/>
+    ${R.bf > .02 ? `<line x1="${X(en)}" y1="${Y(enZ)}" x2="${X(ax_)}" y2="${Y(R.A[2])}" style="stroke:var(--fail)" stroke-width="4" opacity="${Math.min(.8, R.bf * 1.5)}"/>` : ''}
+    <circle cx="${X(ax_)}" cy="${Y(R.A[2])}" r="${Math.max(2, rInj)}" style="fill:var(--lambda)" opacity=".45"/>
+    <circle cx="${X(ax_)}" cy="${Y(R.A[2])}" r="2" style="fill:var(--lambda)"/>
+  </svg><figcaption>${title}</figcaption></figure>`;
+}
+
+// ---- overlay drawing (head coords, inside the eyepiece clip) ----
+function drawSurgery(){
+  const sg = St.sg; if (!sg) return;
+  const mm = mmPerPx(), px = v => v / mm;
+  for (const m of sg.marks){ const [x, y] = toScreen(m[0], m[1]); octx.fillStyle = 'rgba(70,40,120,.85)'; octx.beginPath(); octx.arc(x, y, Math.max(2, px(.06)), 0, 6.283); octx.fill(); }
+  for (const h of sg.holes){
+    const [x, y] = toScreen(h.x, h.y), R = Math.max(2, px(h.r)), t = boneThick(h.x, h.y), rem = clamp(1 - h.depth / t, 0, 1);
+    const g = octx.createRadialGradient(x, y, 0, x, y, R);
+    const inner = h.through ? (h.dura === 'intact' ? 'rgba(170,70,78,.95)' : 'rgba(120,30,40,.95)') : `rgba(${Math.round(240 - 70 * (1 - rem))},${Math.round(225 - 130 * (1 - rem))},${Math.round(215 - 120 * (1 - rem))},.95)`;
+    g.addColorStop(0, inner); g.addColorStop(.75, inner); g.addColorStop(1, 'rgba(248,240,232,.95)');
+    octx.fillStyle = g; octx.beginPath(); octx.arc(x, y, R, 0, 6.283); octx.fill();
+    octx.strokeStyle = 'rgba(255,250,245,.7)'; octx.lineWidth = Math.max(1, px(.03)); octx.stroke(); // bone dust rim
+    if (h.through && h.dura !== 'intact'){ octx.strokeStyle = 'rgba(40,5,10,.9)'; octx.lineWidth = Math.max(1, px(.025)); octx.beginPath(); octx.moveTo(x - R * .35, y); octx.lineTo(x + R * .35, y); octx.stroke(); }
+    if (sg.entry && sg.entry.hole === h && performance.now() - sg.dimpleAt < 1800){ const k = 1 - (performance.now() - sg.dimpleAt) / 1800; octx.strokeStyle = `rgba(255,255,255,${.5 * k})`; octx.lineWidth = 1; octx.beginPath(); octx.arc(x, y, R * (.4 + .3 * k), 0, 6.283); octx.stroke(); }
+  }
+  for (const b of sg.bleeds){
+    if (b.cleared) continue;
+    const [x, y] = toScreen(b.x, b.y), R = px(Math.sqrt(b.A / Math.PI));
+    const g = octx.createRadialGradient(x, y, 0, x, y, R);
+    g.addColorStop(0, b.stopped ? 'rgba(70,8,12,.92)' : 'rgba(110,6,14,.92)'); g.addColorStop(.85, b.stopped ? 'rgba(80,10,14,.85)' : 'rgba(150,12,22,.8)'); g.addColorStop(1, 'rgba(150,12,22,0)');
+    octx.fillStyle = g; octx.beginPath(); octx.arc(x, y, R, 0, 6.283); octx.fill();
+    if (!b.stopped){ octx.fillStyle = 'rgba(255,255,255,.35)'; octx.beginPath(); octx.arc(x - R * .3, y - R * .3, Math.max(1, R * .12), 0, 6.283); octx.fill(); }
+  }
+  if (sg.finished && sg.result && sg.result.bf > .05 && sg.entry && sg.entry.hole){
+    const [x, y] = toScreen(sg.entry.hole.x, sg.entry.hole.y), R = px(.08 + .25 * sg.result.bf);
+    octx.fillStyle = 'rgba(200,235,240,.55)'; octx.beginPath(); octx.arc(x, y, R, 0, 6.283); octx.fill();
+    octx.fillStyle = 'rgba(255,255,255,.8)'; octx.beginPath(); octx.arc(x - R * .35, y - R * .35, R * .2, 0, 6.283); octx.fill();
+  }
+  // planned target (guide only)
+  if (guideOn() && sg.zeroXY){
+    const p = plan(), f = sgFloor(sg.Z0[0] + p.ml, sg.Z0[1] + p.ap), [x, y] = toScreen(f.hx, f.hy);
+    octx.setLineDash([3, 3]); octx.strokeStyle = 'rgba(159,224,192,.8)'; octx.lineWidth = 1; octx.beginPath(); octx.arc(x, y, 9, 0, 6.283); octx.stroke(); octx.setLineDash([]);
+  }
+  // pipette: glass taper coming in from the upper left, with a shadow that meets the tip on contact
+  const fl = sgFloor(sg.T[0], sg.T[1]), h = Math.max(0, sg.T[2] - fl.z), [tx, ty] = toScreen(fl.hx, fl.hy);
+  if (!sg.inBrain){
+    const so = px(h * .5), sx = tx + so, sy = ty + so * .6;
+    const g = octx.createRadialGradient(sx, sy, 0, sx, sy, 10 + so * .2);
+    g.addColorStop(0, `rgba(0,0,0,${.45 - Math.min(.3, h * .08)})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    octx.fillStyle = g; octx.beginPath(); octx.arc(sx, sy, 10 + so * .2, 0, 6.283); octx.fill();
+  }
+  const L = 900, dx = -.55, dy = -.83, tipLen = sg.nj.broken ? 6 : 0;
+  const bx = tx + dx * tipLen, by = ty + dy * tipLen;
+  octx.beginPath(); octx.moveTo(bx - 0.6, by); octx.lineTo(bx + dx * L - 9, by + dy * L); octx.lineTo(bx + dx * L + 9, by + dy * L); octx.lineTo(bx + .6, by); octx.closePath();
+  octx.fillStyle = sg.inBrain ? 'rgba(200,225,230,.22)' : 'rgba(200,230,236,.32)'; octx.fill();
+  octx.strokeStyle = 'rgba(235,250,255,.55)'; octx.lineWidth = 1; octx.beginPath(); octx.moveTo(bx, by); octx.lineTo(bx + dx * L - 4, by + dy * L); octx.stroke();
+  if (sg.nj.actual > 0 || sg.nj.running){ octx.strokeStyle = 'rgba(120,200,160,.55)'; octx.lineWidth = 3; octx.beginPath(); octx.moveTo(bx + dx * 30, by + dy * 30); octx.lineTo(bx + dx * L, by + dy * L); octx.stroke(); }
+}
+
+// ---- wiring ----
+function sgArmKey(e){
+  if (St.mode !== 'surgery' || !St.sg) return false;
+  const s = e.shiftKey ? .01 : St.sg.step, k = e.key;
+  const m = {ArrowUp: [0, s, 0], ArrowDown: [0, -s, 0], ArrowLeft: [-s, 0, 0], ArrowRight: [s, 0, 0], w: [0, 0, s], W: [0, 0, s], PageUp: [0, 0, s], s: [0, 0, -s], S: [0, 0, -s], PageDown: [0, 0, -s]}[k];
+  if (!m) return false;
+  e.preventDefault(); St.sg.drive = null; sgMove(...m); return true;
+}
+let armRepeat = 0;
+$$('.armkey').forEach(b => {
+  const go = () => { const s = St.sg ? St.sg.step : .05, v = b.dataset.v.split(',').map(Number); if (St.sg) St.sg.drive = null; sgMove(v[0] * s, v[1] * s, v[2] * s); };
+  b.addEventListener('pointerdown', e => { e.preventDefault(); go(); clearInterval(armRepeat); armRepeat = setInterval(go, 110); });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => clearInterval(armRepeat));
+});
+$$('#step-seg button').forEach(b => b.addEventListener('click', () => { St.sg.step = +b.dataset.step; sgSyncInputs(); }));
+$$('#ff-seg button').forEach(b => b.addEventListener('click', () => { St.sg.ff = +b.dataset.ff; sgSyncInputs(); }));
+$('#zero-xy').addEventListener('click', () => { sgZeroXY(); sgRenderPanel(); });
+$('#zero-z').addEventListener('click', () => { sgZeroZ(); sgRenderPanel(); });
+$$('[data-rec]').forEach(b => b.addEventListener('click', () => sgRecord(b.dataset.rec)));
+$('#f-inc-up').addEventListener('click', () => sgFrameAdjust('incisor', .05));
+$('#f-inc-dn').addEventListener('click', () => sgFrameAdjust('incisor', -.05));
+$('#f-ear-up').addEventListener('click', () => sgFrameAdjust('ear', .05));
+$('#f-ear-dn').addEventListener('click', () => sgFrameAdjust('ear', -.05));
+$('#t-target').addEventListener('change', e => { St.sg.target = e.target.value; sgRenderPanel(); });
+$('#t-scale').addEventListener('change', e => { St.sg.scale = e.target.checked; sgRenderPanel(); });
+$('#t-tol').addEventListener('change', e => { St.sg.tol = clamp(+e.target.value, 50, 1000) / 1000; });
+$$('#hemi-seg button').forEach(b => b.addEventListener('click', () => { St.sg.hemi = +b.dataset.hemi; sgSyncInputs(); sgRenderPanel(); }));
+for (const [id, key, lo, hi] of [['nj-rate', 'rate', 5, 500], ['nj-vol', 'vol', 10, 2000]]) $('#' + id).addEventListener('change', e => { St.sg.nj[key] = clamp(+e.target.value || 0, lo, hi); e.target.value = St.sg.nj[key]; sgRenderPanel(); });
+$('#nj-wait').addEventListener('change', e => { St.sg.wait = clamp(+e.target.value || 0, 0, 30); });
+$('#nj-speed').addEventListener('change', e => { St.sg.driveSpeed = clamp(+e.target.value || 1, .1, 20); });
+$('#nj-wspeed').addEventListener('change', e => { St.sg.wSpeed = clamp(+e.target.value || .5, .1, 20); });
+$('#nj-test').addEventListener('click', () => {
+  const nj = St.sg.nj;
+  if (St.sg.inBrain){ sgHint('Test the flow in air, before the tip goes into the brain.'); return; }
+  nj.tested = true;
+  if (nj.clog || nj.broken){ $('#nj-status').textContent = 'No bead formed: the tip is clogged.'; $('#nj-rebreak').hidden = false; }
+  else { $('#nj-status').textContent = 'A clean bead formed. The tip is open.'; $('#nj-rebreak').hidden = true; }
+  sgRenderPanel();
+});
+$('#nj-rebreak').addEventListener('click', () => { const nj = St.sg.nj; nj.clog = false; nj.broken = false; $('#nj-status').textContent = 'Tip re-broken. Test again.'; $('#nj-rebreak').hidden = true; nj.tested = false; sgRenderPanel(); });
+$('#nj-lower').addEventListener('click', () => { const sg = St.sg, p = plan(); sg.drive = {to: sg.Z0[2] + p.dv, speed: sg.driveSpeed}; });
+$('#nj-inject').addEventListener('click', () => { const nj = St.sg.nj; nj.running = true; sgHint('Injecting. Keep the arm still.'); sgRenderPanel(); });
+$('#nj-withdraw').addEventListener('click', () => { const sg = St.sg, fl = sgFloor(sg.T[0], sg.T[1]); sg.drive = {to: fl.z + .3, speed: sg.wSpeed}; });
+$('#s-new').addEventListener('click', () => build(newSeed()));
+$('#s-end').addEventListener('click', () => { if (!St.sg.finished) sgFinish(); });
+
+// ---------- main loop ----------
+let last = performance.now(), salineAcc = 0;
+function frame(now){
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (St.skull && !St.busy){
+    if (St.drag && St.drag.kind === 'saline' && St.cursor){ salineAcc += dt; if (salineAcc > .12){ salineAcc = 0; addSaline(St.cursor[0], St.cursor[1], .35, .55); } }
+    St.press.amt += ((St.press.on ? 1 : 0) - St.press.amt) * Math.min(1, dt * (St.press.on ? 5 : 7));
+    const ff = St.mode === 'surgery' && St.sg ? St.sg.ff : 1;
+    stepMoisture(dt * ff);
+    stepHairs(dt * ff);
+    if (St.mode === 'surgery' && St.sg){ sgStep(dt); sgRenderHud(); if (now - (St.sgT || 0) > 250){ St.sgT = now; sgRenderPanel(); } }
+    if (St.submitted && St.revealT < 1) St.revealT = Math.min(1, St.revealT + dt / 1.6);
+    render();
+    if (St.mode === 'quiz') $('#timer').textContent = fmtT(St.t0 == null ? 0 : (St.t1 || now) - St.t0);
+    liveErr();
+    if (St.mode === 'quiz' && now - (St.guideT || 0) > 400){ St.guideT = now; renderGuide(); }
+    if (St.cursor) updateSurface(St.cursor);
+  }
+  requestAnimationFrame(frame);
+}
+resize(); setTool('b'); applyGuidance();
+if (location.protocol !== 'https:') window.__bb = {St, toScreen, sgFloor, readout, sgStep, sgRenderPanel}; // local testing only
+build(newSeed());
+requestAnimationFrame(frame);
+})();
+</script>
